@@ -123,6 +123,39 @@ impl Cpu {
             }
         }
     }
+
+    pub fn fetch(&mut self) -> u8 {
+        let val = self.read_ram(self.pc);
+        self.pc += 1;
+        val
+    }
+
+    pub fn fetch_u16(&mut self) -> u16 {
+        let low = self.fetch();
+        let high = self.fetch();
+        let val = merge_bytes(high, low);
+        val
+    }
+
+    pub fn read_ram(&self, addr: u16) -> u8 {
+        todo!();
+    }
+
+    pub fn write_ram(&mut self, addr: u16, val: u8) {
+        todo!();
+    }
+
+    pub fn dec_r16(&mut self, r: Regs16) {
+        let val = self.get_r16(r);
+        let dec = val.wrapping_sub(1);
+        self.set_r16(r, dec);
+    }
+
+    pub fn add_r16(&mut self, r: Regs16) {
+        let val = self.get_r16(r);
+        let inc = val.wrapping_add(1);
+        self.set_r16(r, inc);
+    }
 }
 
 // 8 bit registers of gameboy processor
