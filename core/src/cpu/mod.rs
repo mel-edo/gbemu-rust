@@ -156,6 +156,30 @@ impl Cpu {
         let inc = val.wrapping_add(1);
         self.set_r16(r, inc);
     }
+
+    // Z0H- for increment and Z1H- for decrement
+
+    pub fn inc_r8(&mut self, r: Regs) {
+        let val = self.get_r8(r);
+        let inc = val.wrapping_add(1);
+        let set_h = check_h_carry_u8(val, 1);
+
+        self.set_r8(r, inc);
+        self.set_flag(Flags::Z, inc == 0);
+        self.set_flag(Flags::N, false);
+        self.set_flag(Flags::H, set_h);
+    }
+
+    pub fn dec_r8(&mut self, r: Regs) {
+        let val = self.get_r8(r);
+        let dec = val.wrapping_sub(1);
+        let set_h = check_h_borrow_u8(val, 1);
+
+        self.set_r8(r, dec);
+        self.set_flag(Flags::Z, dec == 0);
+        self.set_flag(Flags::N, true);
+        self.set_flag(Flags::H, set_h);
+    }
 }
 
 // 8 bit registers of gameboy processor
