@@ -45,7 +45,13 @@ impl Cpu {
             Regs::E => { self.e },
             Regs::F => { self.f },
             Regs::H => { self.h },
-            Regs::L => { self.l }
+            Regs::L => { self.l },
+            // When reading the value at HL addr, it's still a 8bit operation
+            // we'll read the value at that position in memory
+            Regs::HL => {
+                let addr = self.get_r16(Regs16::HL);
+                self.read_ram(addr)
+            }
         }
     }
 
@@ -59,7 +65,11 @@ impl Cpu {
             // note: bottom 4 bits of F are always 0
             Regs::F => { self.f = val & 0xF0 },
             Regs::H => { self.h = val },
-            Regs::L => { self.l = val }
+            Regs::L => { self.l = val },
+            Regs::HL => {
+                let addr = self.get_r16(Regs16::HL);
+                self.write_ram(addr, val);
+            }
         }
     }
 
@@ -151,7 +161,7 @@ impl Cpu {
         self.set_r16(r, dec);
     }
 
-    pub fn add_r16(&mut self, r: Regs16) {
+    pub fn inc_r16(&mut self, r: Regs16) {
         let val = self.get_r16(r);
         let inc = val.wrapping_add(1);
         self.set_r16(r, inc);
@@ -193,7 +203,8 @@ pub enum Regs {
     E,
     F,
     H,
-    L
+    L,
+    HL,
 }
 
 // Gameboy converts 2 8bit registers into a 16 bit register
