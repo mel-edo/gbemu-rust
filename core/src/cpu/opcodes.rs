@@ -7,8 +7,8 @@ const OPCODES: [fn(&mut Cpu) -> u8; 256] = [
     todo, todo, todo, inc_13, inc_14, dec_15, todo, todo, todo, todo, todo, dec_1b, inc_1c, dec_1d, todo, todo,  // 0x10
     todo, todo, todo, inc_23, inc_24, dec_25, todo, todo, todo, todo, todo, dec_2b, inc_2c, dec_2d, todo, todo,  // 0x20
     todo, todo, todo, inc_33, inc_34, dec_35, todo, todo, todo, todo, todo, dec_3b, inc_3c, dec_3d, todo, todo,  // 0x30
-    todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo,  // 0x40
-    todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo,  // 0x50
+    ld_40, ld_41, ld_42, ld_43, ld_44, ld_45, ld_46, ld_47, ld_48, ld_49, ld_4a, ld_4b, ld_4c, ld_4d, ld_4e, ld_4f,  // 0x40
+    ld_50, ld_51, ld_52, ld_53, ld_54, ld_55, ld_56, ld_57, ld_58, ld_59, ld_5a, ld_5b, ld_5c, ld_5d, ld_5e, ld_5f,  // 0x50
     todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo,  // 0x60
     todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo,  // 0x70
     todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo,  // 0x80
@@ -26,7 +26,7 @@ pub fn execute(cpu: &mut Cpu) -> u8 {
     OPCODES[op_index as usize](cpu)
 }
 
-fn todo(cpu: &mut Cpu) -> u8 {
+fn todo(_cpu: &mut Cpu) -> u8 {
     todo!();
 }
 
@@ -183,18 +183,6 @@ fn dec_3d(cpu: &mut Cpu) -> u8 {
 
 // ALL LOAD OPCODES
 
-// LD B, B ----
-fn ld_40(_cpu: &mut Cpu) -> u8 {
-    1  // No need to copy value from register to itself
-}
-
-// LD B, C ----
-fn ld_41(cpu: &mut Cpu) -> u8 {
-    let val = cpu.get_r8(Regs::C);
-    cpu.set_r8(Regs::B, val);
-    1
-}
-
 // LD E, u8 ----
 fn ld_1e(cpu: &mut Cpu) -> u8 {
     let val = cpu.fetch();
@@ -225,6 +213,226 @@ fn ld_2a(cpu: &mut Cpu) -> u8 {
     cpu.set_r8(Regs::A, val);
     cpu.set_r16(Regs16::HL, addr.wrapping_add(1));
     2
+}
+
+// LD B, B ----
+fn ld_40(_cpu: &mut Cpu) -> u8 {
+    1  // No need to copy value from register to itself
+}
+
+// LD B, C ----
+fn ld_41(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r8(Regs::C);
+    cpu.set_r8(Regs::B, val);
+    1
+}
+
+// LD B, D ----
+fn ld_42(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r8(Regs::D);
+    cpu.set_r8(Regs::B, val);
+    1
+}
+
+// LD B, E ----
+fn ld_43(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r8(Regs::E);
+    cpu.set_r8(Regs::B, val);
+    1
+}
+
+// LD B, H ----
+fn ld_44(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r8(Regs::H);
+    cpu.set_r8(Regs::B, val);
+    1
+}
+
+// LD B, L ----
+fn ld_45(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r8(Regs::L);
+    cpu.set_r8(Regs::B, val);
+    1
+}
+
+// LD B, (HL) ----
+fn ld_46(cpu: &mut Cpu) -> u8 {
+    let addr = cpu.get_r16(Regs16::HL);
+    let val = cpu.read_ram(addr);
+    cpu.set_r8(Regs::B, val);
+    2
+}
+
+// LD B, A ----
+fn ld_47(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r8(Regs::A);
+    cpu.set_r8(Regs::B, val);
+    1
+}
+
+// LD C, B ----
+fn ld_48(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r8(Regs::B);
+    cpu.set_r8(Regs::C, val);
+    1
+}
+
+// LD C, C ----
+fn ld_49(_cpu: &mut Cpu) -> u8 {
+    1
+}
+
+// LD C, D ----
+fn ld_4a(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r8(Regs::D);
+    cpu.set_r8(Regs::C, val);
+    1
+}
+
+// LD C, E ----
+fn ld_4b(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r8(Regs::E);
+    cpu.set_r8(Regs::C, val);
+    1
+}
+
+// LD C, H ----
+fn ld_4c(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r8(Regs::H);
+    cpu.set_r8(Regs::C, val);
+    1
+}
+
+// LD C, L ----
+fn ld_4d(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r8(Regs::L);
+    cpu.set_r8(Regs::C, val);
+    1
+}
+
+// LD C, (HL) ----
+fn ld_4e(cpu: &mut Cpu) -> u8 {
+    let addr = cpu.get_r16(Regs16::HL);
+    let val = cpu.read_ram(addr);
+    cpu.set_r8(Regs::C, val);
+    2
+}
+
+// LD C, A ----
+fn ld_4f(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r8(Regs::A);
+    cpu.set_r8(Regs::C, val);
+    1
+}
+
+// LD D, B ----
+fn ld_50(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r8(Regs::B);
+    cpu.set_r8(Regs::D, val);
+    1
+}
+
+// LD D, C ----
+fn ld_51(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r8(Regs::C);
+    cpu.set_r8(Regs::D, val);
+    1
+}
+
+// LD D, D ----
+fn ld_52(_cpu: &mut Cpu) -> u8 {
+    1
+}
+
+// LD D, E ----
+fn ld_53(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r8(Regs::E);
+    cpu.set_r8(Regs::D, val);
+    1
+}
+
+// LD D, H ----
+fn ld_54(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r8(Regs::H);
+    cpu.set_r8(Regs::D, val);
+    1
+}
+
+// LD D, L ----
+fn ld_55(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r8(Regs::L);
+    cpu.set_r8(Regs::D, val);
+    1
+}
+
+// LD D, (HL) ----
+fn ld_56(cpu: &mut Cpu) -> u8 {
+    let addr = cpu.get_r16(Regs16::HL);
+    let val = cpu.read_ram(addr);
+    cpu.set_r8(Regs::D, val);
+    2
+}
+
+// LD D, A ----
+fn ld_57(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r8(Regs::A);
+    cpu.set_r8(Regs::D, val);
+    1
+}
+
+// LD E, B ----
+fn ld_58(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r8(Regs::B);
+    cpu.set_r8(Regs::E, val);
+    1
+}
+
+// LD E, C ----
+fn ld_59(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r8(Regs::C);
+    cpu.set_r8(Regs::E, val);
+    1
+}
+
+// LD E, D ----
+fn ld_5a(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r8(Regs::D);
+    cpu.set_r8(Regs::E, val);
+    1
+}
+
+// LD E, E ----
+fn ld_5b(_cpu: &mut Cpu) -> u8 {
+    1
+}
+
+// LD E, H ----
+fn ld_5c(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r8(Regs::H);
+    cpu.set_r8(Regs::E, val);
+    1
+}
+
+// LD E, L ----
+fn ld_5d(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r8(Regs::L);
+    cpu.set_r8(Regs::E, val);
+    1
+}
+
+// LD E, (HL) ----
+fn ld_5e(cpu: &mut Cpu) -> u8 {
+    let addr = cpu.get_r16(Regs16::HL);
+    let val = cpu.read_ram(addr);
+    cpu.set_r8(Regs::E, val);
+    2
+}
+
+// LD E, A ----
+fn ld_5f(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r8(Regs::A);
+    cpu.set_r8(Regs::E, val);
+    1
 }
 
 // LD (FF00+u8), A ----
