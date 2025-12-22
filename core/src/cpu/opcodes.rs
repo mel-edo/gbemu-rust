@@ -35,6 +35,8 @@ fn nop_00(_cpu: &mut Cpu) -> u8 {
     1
 }
 
+// ALL INC AND DEC OPCODES
+
 // INC BC ----
 fn inc_03(cpu: &mut Cpu) -> u8 {
     cpu.inc_r16(Regs16::BC);
@@ -177,4 +179,74 @@ fn inc_3c(cpu: &mut Cpu) -> u8 {
 fn dec_3d(cpu: &mut Cpu) -> u8 {
     cpu.dec_r8(Regs::A);
     1
+}
+
+// ALL LOAD OPCODES
+
+// LD B, B ----
+fn ld_40(_cpu: &mut Cpu) -> u8 {
+    1  // No need to copy value from register to itself
+}
+
+// LD B, C ----
+fn ld_41(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r8(Regs::C);
+    cpu.set_r8(Regs::B, val);
+    1
+}
+
+// LD E, u8 ----
+fn ld_1e(cpu: &mut Cpu) -> u8 {
+    let val = cpu.fetch();
+    cpu.set_r8(Regs::E, val);
+    2
+}
+
+// LD BC, u16 ----
+fn ld_01(cpu: &mut Cpu) -> u8 {
+    let val = cpu.fetch_u16();
+    cpu.set_r16(Regs16::BC, val);
+    3
+}
+
+// LD (u16), SP ----
+fn ld_08(cpu: &mut Cpu) -> u8 {
+    let addr = cpu.fetch_u16();
+    let val = cpu.get_r16(Regs16::SP);
+    cpu.write_ram(addr, val.low_byte());
+    cpu.write_ram(addr + 1, val.high_byte());
+    5
+}
+
+// LD A, (HL+) ----
+fn ld_2a(cpu: &mut Cpu) -> u8 {
+    let addr = cpu.get_r16(Regs16::HL);
+    let val = cpu.read_ram(addr);
+    cpu.set_r8(Regs::A, val);
+    cpu.set_r16(Regs16::HL, addr.wrapping_add(1));
+    2
+}
+
+// LD (FF00+u8), A ----
+fn ld_e0(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r8(Regs::A);
+    let offset = cpu.fetch() as u16;
+    let addr = 0xFF00 + offset;
+    cpu.write_ram(addr, val);
+    2
+}
+
+// LD HL, SP+i8 00HC
+fn ld_f8(cpu: &mut Cpu) -> u8 {
+    let offset = cpu.fetch() as i8 as i16 as u16;
+    let sp = cpu.get_r16(Regs16::SP);
+    let set_c = check_c_carry_u8(sp.low_byte(), offset.low_byte());
+    let set_h = check_h_carry_u8(sp.low_byte(), offset.low_byte());
+
+    cpu.set_r16(Regs16::HL, offset.wrapping_add(sp));
+    cpu.set_flag(Flags::Z, false);
+    cpu.set_flag(Flags::N, false);
+    cpu.set_flag(Flags::C, set_c);
+    cpu.set_flag(Flags::H, set_h);
+    3
 }
