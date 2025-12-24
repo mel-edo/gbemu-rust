@@ -15,10 +15,10 @@ const OPCODES: [fn(&mut Cpu) -> u8; 256] = [
     sub_90, sub_91, sub_92, sub_93, sub_94, sub_95, sub_96, sub_97, sbc_98, sbc_99, sbc_9a, sbc_9b, sbc_9c, sbc_9d, sbc_9e, sbc_9f,  // 0x90
     and_a0, and_a1, and_a2, and_a3, and_a4, and_a5, and_a6, and_a7, xor_a8, xor_a9, xor_aa, xor_ab, xor_ac, xor_ad, xor_ae, xor_af,  // 0xA0
     or_b0, or_b1, or_b2, or_b3, or_b4, or_b5, or_b6, or_b7, cp_b8, cp_b9, cp_ba, cp_bb, cp_bc, cp_bd, cp_be, cp_bf,  // 0xB0
-    todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo,  // 0xC0
-    todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo, todo,  // 0xD0
-    ld_e0, todo, ld_e2, todo, todo, todo, todo, todo, todo, todo, ld_ea, todo, todo, todo, todo, todo,  // 0xE0
-    ld_f0, todo, ld_f2, todo, todo, todo, todo, todo, ld_f8, ld_f9, ld_fa, todo, todo, todo, todo, todo,  // 0xF0
+    todo, todo, todo, todo, todo, todo, add_c6, todo, todo, todo, todo, todo, todo, todo, adc_ce, todo,  // 0xC0
+    todo, todo, todo, todo, todo, todo, sub_d6, todo, todo, todo, todo, todo, todo, todo, sbc_de, todo,  // 0xD0
+    ld_e0, todo, ld_e2, todo, todo, todo, and_e6, todo, add_e8, todo, ld_ea, todo, todo, todo, xor_ee, todo,  // 0xE0
+    ld_f0, todo, ld_f2, todo, todo, todo, or_f6, todo, ld_f8, ld_f9, ld_fa, todo, todo, todo, cp_fe, todo,  // 0xF0
 ];
 
 pub fn execute(cpu: &mut Cpu) -> u8 {
@@ -1325,4 +1325,76 @@ fn cp_bf(cpu: &mut Cpu) -> u8 {
     let val = cpu.get_r8(Regs::A);
     cpu.cp_a_u8(val);
     1
+}
+
+// ADD A, u8 Z0HC
+fn add_c6(cpu: &mut Cpu) -> u8 {
+    let val = cpu.fetch();
+    cpu.add_a_u8(val, false);
+    2
+}
+
+// ADC A, u8 Z0HC
+fn adc_ce(cpu: &mut Cpu) -> u8 {
+    let val = cpu.fetch();
+    cpu.add_a_u8(val, true);
+    2
+}
+
+// SUB A, u8 Z1HC
+fn sub_d6(cpu: &mut Cpu) -> u8 {
+    let val = cpu.fetch();
+    cpu.sub_a_u8(val, false);
+    2
+}
+
+// SBC A, u8 Z1HC
+fn sbc_de(cpu: &mut Cpu) -> u8 {
+    let val = cpu.fetch();
+    cpu.sub_a_u8(val, true);
+    2
+}
+
+// AND A, u8 Z010
+fn and_e6(cpu: &mut Cpu) -> u8 {
+    let val = cpu.fetch();
+    cpu.and_a_u8(val);
+    2
+}
+
+// ADD SP, i8 00HC
+fn add_e8(cpu: &mut Cpu) -> u8 {
+    let val = cpu.fetch() as i8 as u16;
+    let sp = cpu.get_r16(Regs16::SP);
+    let res = sp.wrapping_add(val);
+    let set_c = check_c_carry_u16(sp, val);
+    let set_h = check_h_carry_u16(sp, val);
+
+    cpu.set_r16(Regs16::SP, res);
+    cpu.set_flag(Flags::Z, false);
+    cpu.set_flag(Flags::N, false);
+    cpu.set_flag(Flags::H, set_h);
+    cpu.set_flag(Flags::C, set_c);
+    4
+}
+
+// XOR A, u8 Z000
+fn xor_ee(cpu: &mut Cpu) -> u8 {
+    let val = cpu.fetch();
+    cpu.xor_a_u8(val);
+    2
+}
+
+// OR A, u8 Z000
+fn or_f6(cpu: &mut Cpu) -> u8 {
+    let val = cpu.fetch();
+    cpu.or_a_u8(val);
+    2
+}
+
+// CP A, u8 Z1HC
+fn cp_fe(cpu: &mut Cpu) -> u8 {
+    let val = cpu.fetch();
+    cpu.cp_a_u8(val);
+    2
 }
