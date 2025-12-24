@@ -286,6 +286,21 @@ impl Cpu {
         self.set_flag(Flags::H, set_h);
         self.set_flag(Flags::C, res.1);
     }
+
+    pub fn pop(&mut self) -> u16 {
+        assert_ne!(self.sp, 0xFFFE, "Trying to pop when stack is empty!");
+        let low = self.read_ram(self.sp);
+        let high = self.read_ram(self.sp + 1);
+        let val = merge_bytes(high, low);
+        self.sp += 2;
+        return val;
+    }
+
+    pub fn push(&mut self, val: u16) {
+        self.sp -= 2;
+        self.write_ram(self.sp, val.low_byte());
+        self.write_ram(self.sp + 1, val.high_byte());
+    }
 }
 
 // 8 bit registers of gameboy processor

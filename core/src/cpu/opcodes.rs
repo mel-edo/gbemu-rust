@@ -1398,3 +1398,61 @@ fn cp_fe(cpu: &mut Cpu) -> u8 {
     cpu.cp_a_u8(val);
     2
 }
+
+// ALL POP and PUSH operations
+
+// POP BC ----
+fn pop_c1(cpu: &mut Cpu) -> u8 {
+    let val = cpu.pop();
+    cpu.set_r16(Regs16::BC, val);
+    3
+}
+
+// PUSH BC ----
+fn push_c5(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r16(Regs16::BC);
+    cpu.push(val);
+    4
+}
+
+// POP DE ----
+fn pop_d1(cpu: &mut Cpu) -> u8 {
+    let val = cpu.pop();
+    cpu.set_r16(Regs16::DE, val);
+    3
+}
+
+// PUSH DE ----
+fn push_d5(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r16(Regs16::DE);
+    cpu.push(val);
+    4
+}
+
+// POP HL ----
+fn pop_e1(cpu: &mut Cpu) -> u8 {
+    let val = cpu.pop();
+    cpu.set_r16(Regs16::HL, val);
+    3
+}
+
+// PUSH HL ----
+fn push_e5(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r16(Regs16::HL);
+    cpu.push(val);
+    4
+}
+
+// POP AF ZNHC
+fn pop_f1(cpu: &mut Cpu) -> u8 {
+    let val = cpu.pop();
+    cpu.set_r16(Regs16::AF, val);
+    3
+}
+
+// PUSH AF ----
+fn push_f5(cpu: &mut Cpu) -> u8 {
+    let val = cpu.get_r16(Regs16::AF);
+    cpu.push(val);
+    4
+}
