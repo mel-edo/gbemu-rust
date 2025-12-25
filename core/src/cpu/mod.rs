@@ -301,6 +301,14 @@ impl Cpu {
         self.write_ram(self.sp, val.low_byte());
         self.write_ram(self.sp + 1, val.high_byte());
     }
+
+    pub fn get_pc(&self) -> u16 {
+        self.pc
+    }
+
+    pub fn set_pc(&mut self, val: u16) {
+        self.pc = val;
+    }
 }
 
 // 8 bit registers of gameboy processor
