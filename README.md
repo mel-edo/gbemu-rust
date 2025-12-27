@@ -5,6 +5,7 @@
 ## Helpful resources
 
 - Great book for [gb emulator development](https://github.com/aquova/gb-book). It is also in rust.
+- Really great article explaining the [DAA instruction](https://ehaskins.com/2018-01-30%20Z80%20DAA/)
 - Complete technical reference for gameboy [pandocs](https://gbdev.io/pandocs/)
 - [Ultimate gameboy talk](https://www.youtube.com/watch?v=HyzD8pNlpwI)
 
