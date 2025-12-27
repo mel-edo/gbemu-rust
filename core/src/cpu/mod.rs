@@ -14,24 +14,54 @@ pub struct Cpu {
     e: u8,
     f: u8,
     h: u8,
-    l: u8
+    l: u8,
+    irq_enabled: bool,
+    halted: bool,
 }
 
 impl Cpu {
-    // Initializing all registers to 0
+    // When you boot up gb, there's some nintendo boot graphic with
+    // the ding noise. This code always runs and leaves the game boy in
+    // a state which all game titles expect themselves to be in.
     pub fn new() -> Self {
-        Cpu {
-            pc: 0x0000,
-            sp: 0x0000,
-            a: 0x00,
+        let mut cpu = Self {
+            pc: 0x0100,
+            sp: 0xFFFE,
+            a: 0x01,
             b: 0x00,
-            c: 0x00,
+            c: 0x13,
             d: 0x00,
-            e: 0x00,
-            f: 0x00,
-            h: 0x00,
-            l: 0x00
-        }
+            e: 0xD8,
+            f: 0xB0,
+            h: 0x01,
+            l: 0x4D,
+            irq_enabled: false,
+            halted: false,
+            // bus: Bus::new(),
+        };
+
+        // The RAM is initialized to these values after boot
+        cpu.write_ram(0xFF10, 0x80);
+        cpu.write_ram(0xFF11, 0xBF);
+        cpu.write_ram(0xFF12, 0xF3);
+        cpu.write_ram(0xFF14, 0xBF);
+        cpu.write_ram(0xFF16, 0x3F);
+        cpu.write_ram(0xFF19, 0xBF);
+        cpu.write_ram(0xFF1A, 0x7F);
+        cpu.write_ram(0xFF1B, 0xFF);
+        cpu.write_ram(0xFF1C, 0x9F);
+        cpu.write_ram(0xFF1E, 0xBF);
+        cpu.write_ram(0xFF20, 0xFF);
+        cpu.write_ram(0xFF23, 0xBF);
+        cpu.write_ram(0xFF24, 0x77);
+        cpu.write_ram(0xFF25, 0xF3);
+        cpu.write_ram(0xFF26, 0xF1); // 0xF0 for SGB (super gb)
+        cpu.write_ram(0xFF40, 0x91);
+        cpu.write_ram(0xFF47, 0xFC);
+        cpu.write_ram(0xFF48, 0xFF);
+        cpu.write_ram(0xFF49, 0xFF);
+
+        cpu
     }
 
     // Getter and setter functions for the registers
@@ -392,6 +422,19 @@ impl Cpu {
         let mut byte = self.get_r8(reg);
         byte.set_bit(bit, set);
         self.set_r8(reg, byte);
+    }
+
+    pub fn set_irq(&mut self, enabled: bool) {
+        self.irq_enabled = enabled;
+    }
+
+    pub fn set_halted(&mut self, halted: bool) {
+        self.halted = halted;
+    }
+
+    pub fn tick(&mut self) -> bool {
+        let cycles = if self.halted { 1 } else { opcodes::execute(self) };
+        false
     }
 }
 
