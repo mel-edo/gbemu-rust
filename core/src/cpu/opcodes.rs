@@ -16,7 +16,7 @@ const OPCODES: [fn(&mut Cpu) -> u8; 256] = [
     and_a0, and_a1, and_a2, and_a3, and_a4, and_a5, and_a6, and_a7, xor_a8, xor_a9, xor_aa, xor_ab, xor_ac, xor_ad, xor_ae, xor_af,  // 0xA0
     or_b0, or_b1, or_b2, or_b3, or_b4, or_b5, or_b6, or_b7, cp_b8, cp_b9, cp_ba, cp_bb, cp_bc, cp_bd, cp_be, cp_bf,  // 0xB0
     ret_c0, pop_c1, jp_c2, jp_c3, call_c4, push_c5, add_c6, rst_c7, ret_c8, ret_c9, jp_ca, todo, call_cc, call_cd, adc_ce, rst_cf,  // 0xC0
-    ret_d0, pop_d1, jp_d2, todo, call_d4, push_d5, sub_d6, rst_d7, ret_d8, todo, jp_da, todo, call_dc, todo, sbc_de, rst_df,  // 0xD0
+    ret_d0, pop_d1, jp_d2, todo, call_d4, push_d5, sub_d6, rst_d7, ret_d8, todo, jp_da, todo, call_dc, prefix_cb, sbc_de, rst_df,  // 0xD0
     ld_e0, pop_e1, ld_e2, todo, todo, push_e5, and_e6, rst_e7, add_e8, jp_e9, ld_ea, todo, todo, todo, xor_ee, rst_ef,  // 0xE0
     ld_f0, pop_f1, ld_f2, todo, todo, push_f5, or_f6, rst_f7, ld_f8, ld_f9, ld_fa, todo, todo, todo, cp_fe, rst_ff,  // 0xF0
 ];
@@ -1740,4 +1740,69 @@ fn rst_ff(cpu: &mut Cpu) -> u8 {
     cpu.push(cpu.get_pc());
     cpu.set_pc(0x0038);
     4
+}
+
+// PREFIX CB
+fn prefix_cb(cpu: &mut Cpu) -> u8 {
+    let cb_index = cpu.fetch();
+    execute_cb(cpu, cb_index)
+}
+
+// we deal with B reg on 0 and 8
+// c is 1 and 9 and so on...
+// so we & it with 111 i.e 7, so after 7 it repeats just like our table
+
+fn get_cb_reg(op: u8) -> Regs {
+    match op & 0b111 {
+        0 => { Regs::B },
+        1 => { Regs::C },
+        2 => { Regs::D },
+        3 => { Regs::E },
+        4 => { Regs::H },
+        5 => { Regs::L },
+        6 => { Regs::HL },
+        7 => { Regs::A },
+        _ => unreachable!()
+    }
+}
+
+fn execute_cb(cpu: &mut Cpu, op: u8) -> u8 {    
+    // 0x00-0x07 -> RLC
+    // 0x08-0x0F -> RRC
+    // 0x10-0x17 -> RL
+    // 0x18-0x1F -> RR
+    // 0x20-0x27 -> SLA
+    // 0x28-0x2F -> SRA
+    // 0x30-0x37 -> SWAP
+    // 0x38-0x3F -> SRL
+    // 0x40-0x7F -> BIT
+    // 0x80-0xBF -> RES
+    // 0xC0-0xFF -> SET
+
+    let cb_reg = get_cb_reg(op);
+    match op {
+        0x00..=0x07 => { cpu.rotate_left(cb_reg, true); },
+        0x08..=0x0F => { cpu.rotate_right(cb_reg, true); },
+        0x10..=0x17 => { cpu.rotate_left(cb_reg, false); },
+        0x18..=0x1F => { cpu.rotate_right(cb_reg, false); },
+        0x20..=0x27 => { cpu.shift_left(cb_reg); },
+        0x28..=0x2F => { cpu.shift_right(cb_reg, true); },
+        0x30..=0x37 => { cpu.swap_bits(cb_reg); },
+        0x38..=0x3F => { cpu.shift_right(cb_reg, false); },
+        0x40..=0x7F => { 
+            // the 3rd, 4th and 5th bits will tell us about which
+            // bit the opcode is gonna work on
+            let bit = (op & 0b111000) >> 3;
+            cpu.test_bit(cb_reg, bit);
+         },
+        0x80..=0xBF => {
+            let bit = (op & 0b111000) >> 3;
+            cpu.write_bit(cb_reg, bit, false);
+        },
+        0xC0..=0xFF => {
+            let bit = (op & 0b111000) >> 3;
+            cpu.write_bit(cb_reg, bit, true);
+        },
+    }
+    2
 }
