@@ -1,6 +1,6 @@
 pub mod opcodes;
 
-use crate::utils::*;
+use crate::{bus::Bus, utils::*};
 
 pub struct Cpu {
     // CPU registers: 16bit program counter and stack pointer
@@ -17,6 +17,7 @@ pub struct Cpu {
     l: u8,
     irq_enabled: bool,
     halted: bool,
+    bus: Bus,
 }
 
 impl Cpu {
@@ -37,7 +38,7 @@ impl Cpu {
             l: 0x4D,
             irq_enabled: false,
             halted: false,
-            // bus: Bus::new(),
+            bus: Bus::new(),
         };
 
         // The RAM is initialized to these values after boot
@@ -178,11 +179,11 @@ impl Cpu {
     }
 
     pub fn read_ram(&self, addr: u16) -> u8 {
-        todo!();
+        self.bus.read_ram(addr)
     }
 
     pub fn write_ram(&mut self, addr: u16, val: u8) {
-        todo!();
+        self.bus.write_ram(addr, val);
     }
 
     pub fn dec_r16(&mut self, r: Regs16) {
