@@ -70,3 +70,6 @@ macro_rules! impl_bitops {
 
 impl_bitops!(u8);
 impl_bitops!(u16);
+
+pub const SCREEN_WIDTH: usize = 160;
+pub const SCREEN_HEIGHT: usize = 144;

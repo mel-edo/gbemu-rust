@@ -437,6 +437,11 @@ impl Cpu {
         let cycles = if self.halted { 1 } else { opcodes::execute(self) };
         false
     }
+
+    pub fn load_rom(&mut self, rom: &[u8]) {
+        unimplemented!();
+        // self.bus.load_rom(rom);
+    }
 }
 
 // 8 bit registers of gameboy processor
