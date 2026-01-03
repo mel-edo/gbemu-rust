@@ -1,6 +1,6 @@
 pub mod opcodes;
 
-use crate::{bus::Bus, utils::*};
+use crate::{bus::Bus, ppu::modes::LcdResults, utils::*};
 
 pub struct Cpu {
     // CPU registers: 16bit program counter and stack pointer
@@ -435,6 +435,8 @@ impl Cpu {
 
     pub fn tick(&mut self) -> bool {
         let cycles = if self.halted { 1 } else { opcodes::execute(self) };
+        let ppu_result = self.bus.update_ppu(cycles);
+        // return ppu_result == LcdResults::RenderFrame;
         false
     }
 
