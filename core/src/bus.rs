@@ -1,5 +1,5 @@
 use crate::cart::{Cart, ROM_START, ROM_STOP};
-use crate::ppu::{Ppu, VRAM_START, VRAM_STOP, PpuUpdateResult};
+use crate::ppu::{Ppu, VRAM_START, VRAM_STOP, PpuUpdateResult, LCD_REG_START, LCD_REG_STOP};
 
 // Game boy has 16 bit address space (0x0000-0xFFFF)
 pub struct Bus {
@@ -29,6 +29,9 @@ impl Bus {
             VRAM_START..=VRAM_STOP => {
                 self.ppu.read_vram(addr)
             },
+            LCD_REG_START..=LCD_REG_STOP => {
+                self.ppu.read_lcd_reg(addr)
+            },
             _ => {
                 let offset = addr - VRAM_STOP - 1;
                 self.ram[offset as usize]
@@ -43,6 +46,9 @@ impl Bus {
             },
             VRAM_START..=VRAM_STOP => {
                 self.ppu.write_vram(addr, val);
+            },
+            LCD_REG_START..=LCD_REG_STOP => {
+                self.ppu.write_lcd_reg(addr, val);
             },
             _ => {
                 let offset = addr - VRAM_STOP - 1;
