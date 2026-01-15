@@ -1,7 +1,9 @@
 use gb_core::cpu::Cpu;
+use gb_core::utils::{SCREEN_HEIGHT, SCREEN_WIDTH};
 use js_sys::Uint8Array;
 use wasm_bindgen::prelude::*;
-use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
+use wasm_bindgen::Clamped;
+use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, ImageData};
 
 #[wasm_bindgen]
 pub struct GB {
@@ -39,5 +41,17 @@ impl GB {
             rom.push(data.get_index(i));
         }
         self.cpu.load_rom(&rom);
+    }
+
+    #[wasm_bindgen]
+    pub fn tick(&mut self) -> bool {
+        self.cpu.tick()
+    }
+
+    #[wasm_bindgen]
+    pub fn draw_screen(&mut self) {
+        let mut framebuffer = self.cpu.render();
+        let img_data = ImageData::new_with_u8_clamped_array_and_sh(Clamped(&mut framebuffer), SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32).unwrap();
+        self.ctx.put_image_data(&img_data, 0.0, 0.0).unwrap();
     }
 }
