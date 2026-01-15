@@ -1,5 +1,6 @@
 use crate::cart::{Cart, ROM_START, ROM_STOP};
 use crate::ppu::{Ppu, VRAM_START, VRAM_STOP, PpuUpdateResult, LCD_REG_START, LCD_REG_STOP};
+use crate::utils::*;
 
 // Game boy has 16 bit address space (0x0000-0xFFFF)
 pub struct Bus {
@@ -59,5 +60,9 @@ impl Bus {
 
     pub fn update_ppu(&mut self, cycles: u8) -> PpuUpdateResult {
         return self.ppu.update(cycles)
+    }
+
+    pub fn render(&self) -> [u8; DISPLAY_BUFFER] {
+        self.ppu.render()
     }
 }

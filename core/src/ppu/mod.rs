@@ -4,7 +4,7 @@ pub mod modes;
 use modes::{Lcd, LcdModeType, LcdResults};
 use tile::Tile;
 
-use crate::utils::{BitOps, Point, unpack_u8};
+use crate::utils::{BitOps, DISPLAY_BUFFER, GB_PALETTE, Point, SCREEN_HEIGHT, SCREEN_WIDTH, unpack_u8};
 
 pub const VRAM_START: u16 = 0x8000;
 pub const VRAM_STOP: u16 = 0x9FFF;
@@ -48,6 +48,11 @@ const STAT_OAM_IRQ_BIT: u8 = 5;
 const STAT_VBLANK_IRQ_BIT: u8 = 4;
 const STAT_HBLANK_IRQ_BIT: u8 = 3;
 const STAT_LY_EQ_LYC_BIT: u8 = 2;
+
+const NUM_TILE_COLS: usize = SCREEN_WIDTH / 8;
+const NUM_TILE_ROWS: usize = SCREEN_HEIGHT / 8;
+const LAYER_WIDTH: usize = 32;
+const TILE_MAP_TABLE_SIZE: usize = TILE_MAP_SIZE / 2;
 
 pub struct PpuUpdateResult {
     pub lcd_result: LcdResults,
@@ -213,6 +218,53 @@ impl Ppu {
             0 => { unpack_u8(self.read_lcd_reg(OBP0)) },
             1 => { unpack_u8(self.read_lcd_reg(OBP1)) },
             _ => { unreachable!() }
+        }
+    }
+
+    pub fn render(&self) -> [u8; DISPLAY_BUFFER] {
+        let mut result = [0xFF; DISPLAY_BUFFER];
+
+        if self.is_bg_layer_displayed() {
+            self.render_bg(&mut result);
+        }
+
+        return result;
+    }
+
+    fn render_bg(&self, buffer: &mut [u8]) {
+        let map_offset = self.get_bg_tile_map_index() as usize * TILE_MAP_TABLE_SIZE;
+        let palette = self.get_bg_palette();
+        // iterate over each screen row and column
+        for ty in 0..NUM_TILE_ROWS {
+            for tx in 0..NUM_TILE_COLS {
+                // get approapriate pixel data for that spot
+                let map_num = ty * LAYER_WIDTH + tx;
+                let tile_index = self.maps[map_offset + map_num] as usize;
+                // calculate correct tile index if needed
+                let adjusted_tile_index = if self.get_bg_wndw_tile_set_index() == 1 {
+                    tile_index as usize
+                } else {
+                    (256 + tile_index as i8 as isize) as usize
+                };
+                let tile = self.tiles[adjusted_tile_index];
+                // Iterate over each pixel
+                for y in 0..8 {
+                    let row = tile.get_row(y);
+                    let pixel_y = 8 * ty + y as usize;
+                    for x in 0..8 {
+                        // use palette table to get right rgba value
+                        let pixel_x = 8 * tx + x;
+                        let cell = row[x];
+                        let color_idx = palette[cell as usize];
+                        let color = GB_PALETTE[color_idx as usize];
+                        // copy the rgba channels into the right spot in the buffer
+                        let buffer_idx = 4 * (pixel_y * SCREEN_WIDTH + pixel_x);
+                        for i in 0..4 {
+                            buffer[buffer_idx + i] = color[i];
+                        }
+                    }
+                }
+            }
         }
     }
 }

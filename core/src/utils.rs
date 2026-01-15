@@ -73,6 +73,14 @@ impl_bitops!(u16);
 
 pub const SCREEN_WIDTH: usize = 160;
 pub const SCREEN_HEIGHT: usize = 144;
+pub const DISPLAY_BUFFER: usize = SCREEN_HEIGHT * SCREEN_WIDTH * 4;
+
+pub const GB_PALETTE: [[u8; 4]; 4] = [
+    [255, 255, 255, 255],
+    [128, 128, 128, 255],
+    [64, 64, 64, 255],
+    [0, 0, 0, 255]
+];
 
 #[derive(Clone, Copy)]
 pub struct Point {

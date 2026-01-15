@@ -1,5 +1,5 @@
-use gb_core::{utils::{SCREEN_HEIGHT, SCREEN_WIDTH}, cpu::Cpu};
-use sdl2::{event::Event, keyboard::Keycode};
+use gb_core::{cpu::Cpu, utils::{DISPLAY_BUFFER, SCREEN_HEIGHT, SCREEN_WIDTH}};
+use sdl2::{event::Event, keyboard::Keycode, pixels::Color, rect::Rect, render::Canvas, video::Window};
 use std::{thread::sleep, time::Duration, env, fs::File, io::Read};
 
 const SCALE: u32 = 3;
@@ -37,7 +37,10 @@ fn main() {
             }
         }
 
-        sleep(Duration::from_millis(100));
+        // keep ticking until told to stop
+        while !gb.tick() {}
+        let frame = gb.render();
+        draw_screen(&frame, &mut canvas);
     }
 }
 
@@ -47,4 +50,17 @@ fn load_rom(path: &str) -> Vec<u8> {
     let mut f = File::open(path).expect("Error opening ROM file");
     f.read_to_end(&mut buffer).expect("Error loading ROM");
     buffer
+}
+
+fn draw_screen(data: &[u8], canvas: &mut Canvas<Window>) {
+    for i in (0..DISPLAY_BUFFER).step_by(4) {
+        canvas.set_draw_color(Color::RGB(data[i], data[i + 1], data[i + 2]));
+        let pixel = i / 4;
+        let x = (pixel % SCREEN_WIDTH) as u32;
+        let y = (pixel / SCREEN_WIDTH) as u32;
+
+        let rect = Rect::new((x * SCALE) as i32, (y * SCALE) as i32, SCALE, SCALE);
+        canvas.fill_rect(rect).unwrap();
+    }
+    canvas.present();
 }

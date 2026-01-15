@@ -498,6 +498,10 @@ impl Cpu {
         unimplemented!();
         // self.bus.load_rom(rom);
     }
+
+    pub fn render(&self) -> [u8; DISPLAY_BUFFER] {
+        self.bus.render()
+    }
 }
 
 // 8 bit registers of gameboy processor
