@@ -495,8 +495,7 @@ impl Cpu {
     }
 
     pub fn load_rom(&mut self, rom: &[u8]) {
-        unimplemented!();
-        // self.bus.load_rom(rom);
+        self.bus.load_rom(rom);
     }
 
     pub fn render(&self) -> [u8; DISPLAY_BUFFER] {
