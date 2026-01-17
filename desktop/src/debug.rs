@@ -173,8 +173,8 @@ impl Debugger {
         let mut pc = gb.get_pc();
         for _ in 0..5 {  // fetching next 5 instructions
             let op = gb.read_ram(pc) as usize;
-            let mut name;
-            let mut len;
+            let name;
+            let len;
 
             if op != 0xCB {
                 name = OPCODE_NAMES[op].to_string();
