@@ -41,6 +41,14 @@ async function run() {
 
         fr.readAsArrayBuffer(file)
     }, false)
+
+    document.addEventListener("keydown", function(e) {
+        gb.press_button(e, true)
+    })
+
+    document.addEventListener("keyup", function(e) {
+        gb.press_button(e, false)
+    })
 }
 
 function mainloop(gb) {

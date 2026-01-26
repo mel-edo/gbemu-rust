@@ -1,9 +1,10 @@
 use gb_core::cpu::Cpu;
 use gb_core::utils::{SCREEN_HEIGHT, SCREEN_WIDTH};
+use gb_core::io::Buttons;
 use js_sys::Uint8Array;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::Clamped;
-use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, ImageData};
+use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, ImageData, KeyboardEvent};
 
 #[wasm_bindgen]
 pub struct GB {
@@ -53,5 +54,27 @@ impl GB {
         let mut framebuffer = self.cpu.render();
         let img_data = ImageData::new_with_u8_clamped_array_and_sh(Clamped(&mut framebuffer), SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32).unwrap();
         self.ctx.put_image_data(&img_data, 0.0, 0.0).unwrap();
+    }
+
+    #[wasm_bindgen]
+    pub fn press_button(&mut self, event: KeyboardEvent, pressed: bool) {
+        let key = event.key();
+        if let Some(button) = key2btn(&key) {
+            self.cpu.press_button(button, pressed);
+        }
+    }
+}
+
+fn key2btn(key: &str) -> Option<Buttons> {
+    match key {
+        "ArrowDown" => { Some(Buttons::Down) },
+        "ArrowUp" => { Some(Buttons::Up) },
+        "ArrowRight" => { Some(Buttons::Right) },
+        "ArrowLeft" => { Some(Buttons::Left) },
+        "Enter" => { Some(Buttons::Start) },
+        "Backspace" => { Some(Buttons::Select) },
+        "x" => { Some(Buttons::A) },
+        "z" => { Some(Buttons::B) },
+        _ => { None },
     }
 }
