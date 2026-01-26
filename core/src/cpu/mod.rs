@@ -1,6 +1,6 @@
 pub mod opcodes;
 
-use crate::{bus::Bus, ppu::modes::LcdResults, utils::*};
+use crate::{bus::Bus, io::Buttons, ppu::modes::LcdResults, utils::*};
 
 pub struct Cpu {
     // CPU registers: 16bit program counter and stack pointer
@@ -500,6 +500,11 @@ impl Cpu {
 
     pub fn render(&self) -> [u8; DISPLAY_BUFFER] {
         self.bus.render()
+    }
+
+    pub fn press_button(&mut self, button: Buttons, pressed: bool) {
+        self.bus.press_button(button, pressed);
+        self.enable_irq_type(Interrupts::Joypad, true);
     }
 }
 
