@@ -1,8 +1,10 @@
 mod tile;
 pub mod modes;
+mod sprite;
 
 use modes::{Lcd, LcdModeType, LcdResults};
 use tile::Tile;
+use sprite::Sprite;
 
 use crate::utils::{BitOps, DISPLAY_BUFFER, GB_PALETTE, Point, SCREEN_HEIGHT, SCREEN_WIDTH, unpack_u8};
 
@@ -58,6 +60,12 @@ const TILESIZE: usize = 8;
 const LAYERSIZE: usize = 32;
 const MAP_PIXELS: usize = TILESIZE * LAYERSIZE;
 
+pub const OAM_START: u16 = 0xFE00;
+pub const OAM_STOP: u16 = 0xFE9F;
+
+const NUM_OAM_SPRITES: usize = 40;
+const BYTES_PER_SPRITE: u16 = 4;
+
 pub struct PpuUpdateResult {
     pub lcd_result: LcdResults,
     pub irq: bool,
@@ -68,6 +76,7 @@ pub struct Ppu {
     tiles: [Tile; NUM_TILES],
     maps: [u8; TILE_MAP_SIZE],
     lcd_regs: [u8; LCD_REG_SIZE],
+    oam: [Sprite; NUM_OAM_SPRITES],
 }
 
 impl Ppu {
@@ -77,6 +86,7 @@ impl Ppu {
             tiles: [Tile::new(); NUM_TILES],
             maps: [0; TILE_MAP_SIZE],
             lcd_regs: [0; LCD_REG_SIZE],
+            oam: [Sprite::new(); NUM_OAM_SPRITES],
         }
     }
 
@@ -148,6 +158,18 @@ impl Ppu {
             },
             _ => { unreachable!() }
         }
+    }
+
+    pub fn read_oam(&self, addr: u16) -> u8 {
+        let relative_addr = addr - OAM_START;
+        let oam_idx = relative_addr / BYTES_PER_SPRITE;
+        self.oam[oam_idx as usize].read_u8(addr)
+    }
+
+    pub fn write_oam(&mut self, addr: u16, val: u8) {
+        let relative_addr = addr - OAM_START;
+        let oam_idx = relative_addr / BYTES_PER_SPRITE;
+        self.oam[oam_idx as usize].write_u8(addr, val);
     }
 
     pub fn read_lcd_reg(&self, addr: u16) -> u8 {

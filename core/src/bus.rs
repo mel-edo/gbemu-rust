@@ -1,7 +1,9 @@
 use crate::cart::{Cart, ROM_START, ROM_STOP};
-use crate::ppu::{Ppu, VRAM_START, VRAM_STOP, PpuUpdateResult, LCD_REG_START, LCD_REG_STOP};
+use crate::ppu::{LCD_REG_START, LCD_REG_STOP, OAM_START, OAM_STOP, Ppu, PpuUpdateResult, VRAM_START, VRAM_STOP};
 use crate::utils::*;
 use crate::io::{Buttons, IO, IO_START, IO_STOP};
+
+const OAM_DMA: u16 = 0xFF46;
 
 // Game boy has 16 bit address space (0x0000-0xFFFF)
 pub struct Bus {
@@ -33,6 +35,9 @@ impl Bus {
             VRAM_START..=VRAM_STOP => {
                 self.ppu.read_vram(addr)
             },
+            OAM_START..=OAM_STOP => {
+                self.ppu.read_oam(addr)
+            },
             LCD_REG_START..=LCD_REG_STOP => {
                 self.ppu.read_lcd_reg(addr)
             },
@@ -58,7 +63,13 @@ impl Bus {
             VRAM_START..=VRAM_STOP => {
                 self.ppu.write_vram(addr, val);
             },
+            OAM_START..=OAM_STOP => {
+                self.ppu.write_oam(addr, val);
+            },
             LCD_REG_START..=LCD_REG_STOP => {
+                if addr == OAM_DMA {
+                    self.dma_transfer(val);
+                }
                 self.ppu.write_lcd_reg(addr, val);
             },
             IO_START..=IO_STOP => {
@@ -77,5 +88,13 @@ impl Bus {
 
     pub fn render(&self) -> [u8; DISPLAY_BUFFER] {
         self.ppu.render()
+    }
+
+    fn dma_transfer(&mut self, val: u8) {
+        let src = (val as u16) << 8;
+        for i in 0..0xA0 {
+            let val = self.read_ram(src + i);
+            self.write_ram(OAM_START + i, val);
+        }
     }
 }
