@@ -2,15 +2,20 @@ use crate::cart::{Cart, ROM_START, ROM_STOP};
 use crate::ppu::{LCD_REG_START, LCD_REG_STOP, OAM_START, OAM_STOP, Ppu, PpuUpdateResult, VRAM_START, VRAM_STOP};
 use crate::utils::*;
 use crate::io::{Buttons, IO, IO_START, IO_STOP};
+use crate::wram::{WRAM, ECHO_STOP, WRAM_START};
 
 const OAM_DMA: u16 = 0xFF46;
+const HRAM_START: u16 = 0xFF80;
+const HRAM_STOP: u16 = 0xFFFF;
+const HRAM_SIZE: usize = (HRAM_STOP - HRAM_START + 1) as usize;
 
 // Game boy has 16 bit address space (0x0000-0xFFFF)
 pub struct Bus {
     rom: Cart,
     ppu: Ppu,
-    ram: [u8; 0x6000],
     io: IO,
+    wram: WRAM,
+    hram: [u8; HRAM_SIZE],
 }
 
 impl Bus {
@@ -18,8 +23,9 @@ impl Bus {
         Self {
             rom: Cart::new(),
             ppu: Ppu::new(),
-            ram: [0; 0x6000],
             io: IO::new(),
+            wram: WRAM::new(),
+            hram: [0; HRAM_SIZE],
         }
     }
 
@@ -35,6 +41,9 @@ impl Bus {
             VRAM_START..=VRAM_STOP => {
                 self.ppu.read_vram(addr)
             },
+            WRAM_START..=ECHO_STOP => {
+                self.wram.read_u8(addr)
+            },
             OAM_START..=OAM_STOP => {
                 self.ppu.read_oam(addr)
             },
@@ -44,9 +53,12 @@ impl Bus {
             IO_START..=IO_STOP => {
                 self.io.read_u8(addr)
             },
+            HRAM_START..=HRAM_STOP => {
+                let relative_addr = addr - HRAM_START;
+                self.hram[relative_addr as usize]
+            },
             _ => {
-                let offset = addr - VRAM_STOP - 1;
-                self.ram[offset as usize]
+                0
             }
         }
     }
@@ -63,6 +75,9 @@ impl Bus {
             VRAM_START..=VRAM_STOP => {
                 self.ppu.write_vram(addr, val);
             },
+            WRAM_START..=ECHO_STOP => {
+                self.wram.write_u8(addr, val);
+            },
             OAM_START..=OAM_STOP => {
                 self.ppu.write_oam(addr, val);
             },
@@ -75,10 +90,11 @@ impl Bus {
             IO_START..=IO_STOP => {
                 self.io.write_u8(addr, val);
             },
-            _ => {
-                let offset = addr - VRAM_STOP - 1;
-                self.ram[offset as usize] = val;
-            }
+            HRAM_START..=HRAM_STOP => {
+                let relative_addr = addr - HRAM_START;
+                self.hram[relative_addr as usize] = val;
+            },
+            _ => {}
         }
     }
 
