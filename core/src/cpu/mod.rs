@@ -18,6 +18,8 @@ pub struct Cpu {
     irq_enabled: bool,
     halted: bool,
     bus: Bus,
+    last_read: Option<u16>,
+    last_write: Option<u16>,
 }
 
 impl Cpu {
@@ -39,6 +41,8 @@ impl Cpu {
             irq_enabled: false,
             halted: false,
             bus: Bus::new(),
+            last_read: None,
+            last_write: None,
         };
 
         // The RAM is initialized to these values after boot
@@ -434,6 +438,8 @@ impl Cpu {
     }
 
     pub fn tick(&mut self) -> bool {
+        self.last_read = None;
+        self.last_write = None;
         let mut draw_time = false;
         let cycles = if self.halted { 1 } else { opcodes::execute(self) };
         let ppu_result = self.bus.update_ppu(cycles);
@@ -442,11 +448,22 @@ impl Cpu {
         }
         match ppu_result.lcd_result {
             LcdResults::RenderFrame => {
+                // render final scanline
+                // self.bus.render_scanline();
                 self.enable_irq_type(Interrupts::Vblank, true);
                 draw_time = true;
             },
+            // LcdResults::RenderLine => {
+            //     self.bus.render_scanline();
+            // },
             _ => {},
         }
+
+        let timer_irq = self.bus.update_timer(cycles);
+        if timer_irq {
+            self.enable_irq_type(Interrupts::Timer, true);
+        }
+
         if let Some(irq) = self.check_irq() {
             self.trigger_irq(irq);
         }

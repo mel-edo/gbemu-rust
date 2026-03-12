@@ -102,8 +102,16 @@ impl Bus {
         return self.ppu.update(cycles)
     }
 
+    pub fn update_timer(&mut self, cycles: u8) -> bool {
+        self.io.update_timer(cycles)
+    }
+
     pub fn render(&self) -> [u8; DISPLAY_BUFFER] {
         self.ppu.render()
+    }
+
+    pub fn render_scanline(&mut self) {
+        self.ppu.render_scanline();
     }
 
     fn dma_transfer(&mut self, val: u8) {
