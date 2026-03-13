@@ -121,4 +121,8 @@ impl Bus {
             self.write_ram(OAM_START + i, val);
         }
     }
+
+    pub fn get_title(&self) -> &str {
+        self.rom.get_title()
+    }
 }

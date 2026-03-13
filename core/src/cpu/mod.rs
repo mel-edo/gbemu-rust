@@ -523,6 +523,10 @@ impl Cpu {
         self.bus.press_button(button, pressed);
         self.enable_irq_type(Interrupts::Joypad, true);
     }
+
+    pub fn get_title(&self) -> &str {
+        self.bus.get_title()
+    }
 }
 
 // 8 bit registers of gameboy processor
