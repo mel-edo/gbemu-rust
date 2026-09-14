@@ -102,6 +102,10 @@ fn main() {
         // keep ticking until told to stop
         tick_until_draw(&mut gb, &mut gbd, &gamename);
 
+        while audio_queue.size() > 16384 {
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+
         if !gb.bus.apu.audio_buffer.is_empty() {
             audio_queue.queue_audio(&gb.bus.apu.audio_buffer).unwrap();
             gb.bus.apu.audio_buffer.clear();
