@@ -14,6 +14,16 @@ ctx.fillRect(0, 0, canvas.width, canvas.height)
 
 let anim_frame = 0
 
+let audioCtx = null;
+let audioStartTime = 0;
+
+function initAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
+        audioStartTime = audioCtx.currentTime;
+    }
+}
+
 async function run() {
     await init()
     let gb = new wasm.GB()
@@ -38,6 +48,7 @@ async function run() {
             let title = gb.get_title()
             document.title = title
 
+            initAudio()
             mainloop(gb)
         }
 
@@ -62,6 +73,29 @@ function mainloop(gb) {
                 let ctx = canvas.getContext('2d')
                 ctx.imageSmoothingEnabled = false
                 ctx.drawImage(canvas, 0, 0, WIDTH, HEIGHT, 0, 0, canvas.width, canvas.height)
+            }
+
+            let samples = gb.get_audio_samples();
+            if (samples.length > 0 && audioCtx) {
+                let buffer = audioCtx.createBuffer(2, samples.length / 2, 44100);
+                let leftChannel = buffer.getChannelData(0);
+                let rightChannel = buffer.getChannelData(1);
+                
+                for (let i = 0; i < samples.length / 2; i++) {
+                    leftChannel[i] = samples[i * 2];
+                    rightChannel[i] = samples[i * 2 + 1];
+                }
+                
+                let source = audioCtx.createBufferSource();
+                source.buffer = buffer;
+                source.connect(audioCtx.destination);
+                
+                if (audioStartTime < audioCtx.currentTime) {
+                    audioStartTime = audioCtx.currentTime;
+                }
+                
+                source.start(audioStartTime);
+                audioStartTime += buffer.duration;
             }
 
             anim_frame = window.requestAnimationFrame(() => {

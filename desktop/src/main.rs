@@ -1,7 +1,7 @@
 mod debug;
 
 use gb_core::{cpu::Cpu, io::Buttons, utils::{DISPLAY_BUFFER, SCREEN_HEIGHT, SCREEN_WIDTH}};
-use sdl2::{event::Event, keyboard::Keycode, pixels::Color, rect::Rect, render::Canvas, video::Window};
+use sdl2::{event::Event, keyboard::Keycode, pixels::Color, rect::Rect, render::Canvas, video::Window, audio::AudioSpecDesired};
 use std::{env, fs::{File, OpenOptions}, io::{Read, Write}, path::Path, process::exit};
 use crate::debug::Debugger;
 
@@ -28,6 +28,15 @@ fn main() {
 
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
+    
+    let audio_subsystem = sdl_context.audio().unwrap();
+    let desired_spec = AudioSpecDesired {
+        freq: Some(44100),
+        channels: Some(2), // stereo
+        samples: Some(2048), // buffer size
+    };
+    let audio_queue = audio_subsystem.open_queue::<f32, _>(None, &desired_spec).unwrap();
+    audio_queue.resume();
     let window = video_subsystem.window(title, WINDOW_WIDTH, WINDOW_HEIGHT).position_centered().opengl().build().unwrap();
     let mut canvas = window.into_canvas().present_vsync().build().unwrap();
     canvas.clear();
@@ -60,6 +69,11 @@ fn main() {
 
         // keep ticking until told to stop
         tick_until_draw(&mut gb, &mut gbd, &gamename);
+        
+        if !gb.bus.apu.audio_buffer.is_empty() {
+            audio_queue.queue_audio(&gb.bus.apu.audio_buffer).unwrap();
+            gb.bus.apu.audio_buffer.clear();
+        }
         let frame = gb.render();
         draw_screen(&frame, &mut canvas);
     }

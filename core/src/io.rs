@@ -11,8 +11,6 @@ pub enum Buttons {
     Down = 7,
 }
 
-// TODO: Serial port and audio implementation
-
 pub const IO_START: u16 = 0xFF00;
 pub const IO_STOP: u16 = 0xFF3F;
 
@@ -42,12 +40,8 @@ impl IO {
 
     pub fn read_u8(&self, addr: u16) -> u8 {
         match addr {
-            DIV..=TAC => {
-                self.timer.read_timer(addr)
-            },
-            JOYPAD_ADDR => {
-                self.read_joypad()
-            },
+            DIV..=TAC => self.timer.read_timer(addr),
+            JOYPAD_ADDR => self.read_joypad(),
             _ => {
                 let relative_addr = addr - IO_START;
                 self.ram[relative_addr as usize]
@@ -89,22 +83,11 @@ impl IO {
         match addr {
             DIV..=TAC => {
                 self.timer.write_timer(addr, val);
-            },
+            }
             JOYPAD_ADDR => {
                 self.face_selected = !val.get_bit(FACE_SELECT_BIT);
                 self.dpad_selected = !val.get_bit(DPAD_SELECT_BIT);
-            },
-            0xFF01 => {
-                let relative_addr = addr - IO_START;
-                self.ram[relative_addr as usize] = val;
-            },
-            0xFF02 => {
-                let relative_addr = addr - IO_START;
-                self.ram[relative_addr as usize] = val;
-                if val == 0x81 {
-                    print!("{}", self.ram[(0xFF01 - IO_START) as usize] as char);
-                }
-            },
+            }
             _ => {
                 let relative_addr = addr - IO_START;
                 self.ram[relative_addr as usize] = val;
@@ -113,11 +96,6 @@ impl IO {
     }
 }
 
-const DPAD_BUTTONS: [Buttons; 4] = [
-    Buttons::Right, Buttons::Left, Buttons::Up, Buttons::Down,
-];
+const DPAD_BUTTONS: [Buttons; 4] = [Buttons::Right, Buttons::Left, Buttons::Up, Buttons::Down];
 
-const FACE_BUTTONS: [Buttons; 4] = [
-    Buttons::A, Buttons::B, Buttons::Select, Buttons::Start,
-];
-
+const FACE_BUTTONS: [Buttons; 4] = [Buttons::A, Buttons::B, Buttons::Select, Buttons::Start];

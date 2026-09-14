@@ -1894,7 +1894,8 @@ fn halt_76(cpu: &mut Cpu) -> u8 {
 fn invalid(cpu: &mut Cpu) -> u8 {
     let pc = cpu.get_pc();
     let op = cpu.read_ram(pc.wrapping_sub(1));
-    panic!("Invalid opcode: 0x{:02X} at PC: 0x{:04X}", op, pc.wrapping_sub(1));
+    println!("Invalid opcode: 0x{:02X} at PC: 0x{:04X}", op, pc.wrapping_sub(1));
+    1
 }
 
 // DAA Z-0C

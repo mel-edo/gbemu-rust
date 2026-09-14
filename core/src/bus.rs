@@ -3,6 +3,8 @@ use crate::ppu::{LCD_REG_START, LCD_REG_STOP, OAM_START, OAM_STOP, Ppu, PpuUpdat
 use crate::utils::*;
 use crate::io::{Buttons, IO, IO_START, IO_STOP};
 use crate::wram::{WRAM, ECHO_STOP, WRAM_START};
+use crate::apu::{Apu, APU_START, APU_STOP};
+use crate::serial::{Serial, SB, SC};
 
 const OAM_DMA: u16 = 0xFF46;
 const HRAM_START: u16 = 0xFF80;
@@ -16,6 +18,8 @@ pub struct Bus {
     io: IO,
     wram: WRAM,
     hram: [u8; HRAM_SIZE],
+    pub apu: Apu,
+    pub serial: Serial,
 }
 
 impl Bus {
@@ -26,6 +30,8 @@ impl Bus {
             io: IO::new(),
             wram: WRAM::new(),
             hram: [0; HRAM_SIZE],
+            apu: Apu::new(),
+            serial: Serial::new(),
         }
     }
 
@@ -52,6 +58,12 @@ impl Bus {
             },
             LCD_REG_START..=LCD_REG_STOP => {
                 self.ppu.read_lcd_reg(addr)
+            },
+            APU_START..=APU_STOP => {
+                self.apu.read_u8(addr)
+            },
+            SB | SC => {
+                self.serial.read_u8(addr)
             },
             IO_START..=IO_STOP => {
                 self.io.read_u8(addr)
@@ -95,6 +107,12 @@ impl Bus {
                 }
                 self.ppu.write_lcd_reg(addr, val);
             },
+            APU_START..=APU_STOP => {
+                self.apu.write_u8(addr, val);
+            },
+            SB | SC => {
+                self.serial.write_u8(addr, val);
+            },
             IO_START..=IO_STOP => {
                 self.io.write_u8(addr, val);
             },
@@ -113,6 +131,10 @@ impl Bus {
 
     pub fn update_timer(&mut self, cycles: u8) -> bool {
         self.io.update_timer(cycles)
+    }
+
+    pub fn update_serial(&mut self, cycles: u8) -> bool {
+        self.serial.tick(cycles)
     }
 
     pub fn render(&self) -> [u8; DISPLAY_BUFFER] {

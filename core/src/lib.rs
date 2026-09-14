@@ -6,3 +6,5 @@ pub mod ppu;
 pub mod io;
 pub mod wram;
 pub mod timer;
+pub mod apu;
+pub mod serial;

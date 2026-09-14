@@ -1,7 +1,7 @@
 use gb_core::cpu::Cpu;
 use gb_core::utils::{SCREEN_HEIGHT, SCREEN_WIDTH};
 use gb_core::io::Buttons;
-use js_sys::Uint8Array;
+use js_sys::{Uint8Array, Float32Array};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::Clamped;
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, ImageData, KeyboardEvent};
@@ -19,7 +19,7 @@ impl GB {
         let cpu = Cpu::new();
 
         let document = web_sys::window().unwrap().document().unwrap();
-        let canvas = document.get_element_by_id("cavas").unwrap();
+        let canvas = document.get_element_by_id("canvas").unwrap();
         let canvas: HtmlCanvasElement = canvas.dyn_into::<HtmlCanvasElement>()
             .map_err(|_| ())
             .unwrap();
@@ -67,6 +67,15 @@ impl GB {
     #[wasm_bindgen]
     pub fn get_title(&self) -> String {
         self.cpu.get_title().to_string()
+    }
+
+    #[wasm_bindgen]
+    pub fn get_audio_samples(&mut self) -> Float32Array {
+        let buffer = &self.cpu.bus.apu.audio_buffer;
+        let js_array = unsafe { Float32Array::view(buffer.as_slice()) };
+        let copied_array = Float32Array::new(&js_array);
+        self.cpu.bus.apu.audio_buffer.clear();
+        copied_array
     }
 }
 

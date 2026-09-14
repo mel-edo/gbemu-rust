@@ -465,6 +465,13 @@ impl Cpu {
             self.enable_irq_type(Interrupts::Timer, true);
         }
 
+        let serial_irq = self.bus.update_serial(cycles);
+        if serial_irq {
+            self.enable_irq_type(Interrupts::Serial, true);
+        }
+
+        self.bus.apu.tick(cycles);
+
         if let Some(irq) = self.check_irq() {
             self.trigger_irq(irq);
         }
