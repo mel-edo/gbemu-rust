@@ -1566,8 +1566,8 @@ fn rst_c7(cpu: &mut Cpu) -> u8 {
 
 // RET Z ----
 fn ret_c8(cpu: &mut Cpu) -> u8 {
-    let addr = cpu.pop();
     if cpu.get_flag(Flags::Z) {
+        let addr = cpu.pop();
         cpu.set_pc(addr);
         5
     } else {

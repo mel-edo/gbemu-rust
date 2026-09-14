@@ -37,6 +37,13 @@ impl Bus {
 
     pub fn load_rom(&mut self, data: &[u8]) {
         self.rom.load_cart(data);
+        let is_cgb = self.rom.is_cgb();
+        self.ppu.set_cgb(is_cgb);
+        self.wram.set_cgb(is_cgb);
+    }
+
+    pub fn is_cgb(&self) -> bool {
+        self.rom.is_cgb()
     }
 
     pub fn read_ram(&self, addr: u16) -> u8 {
@@ -59,6 +66,9 @@ impl Bus {
             LCD_REG_START..=LCD_REG_STOP => {
                 self.ppu.read_lcd_reg(addr)
             },
+            0xFF4F => {
+                self.ppu.read_vbk()
+            },
             APU_START..=APU_STOP => {
                 self.apu.read_u8(addr)
             },
@@ -71,6 +81,9 @@ impl Bus {
             HRAM_START..=HRAM_STOP => {
                 let relative_addr = addr - HRAM_START;
                 self.hram[relative_addr as usize]
+            },
+            0xFF70 => {
+                self.wram.read_svbk()
             },
             _ => {
                 0
@@ -107,6 +120,9 @@ impl Bus {
                 }
                 self.ppu.write_lcd_reg(addr, val);
             },
+            0xFF4F => {
+                self.ppu.write_vbk(val);
+            },
             APU_START..=APU_STOP => {
                 self.apu.write_u8(addr, val);
             },
@@ -119,6 +135,9 @@ impl Bus {
             HRAM_START..=HRAM_STOP => {
                 let relative_addr = addr - HRAM_START;
                 self.hram[relative_addr as usize] = val;
+            },
+            0xFF70 => {
+                self.wram.write_svbk(val);
             },
             _ => {}
         }

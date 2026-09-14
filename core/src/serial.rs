@@ -59,7 +59,7 @@ impl Serial {
         }
 
         let mut interrupt = false;
-        let cycles_u32 = cycles as u32;
+        let cycles_u32 = (cycles as u32) * 4;
 
         if self.timer > cycles_u32 {
             self.timer -= cycles_u32;

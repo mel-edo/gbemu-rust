@@ -71,10 +71,12 @@ pub struct PpuUpdateResult {
 pub struct Ppu {
     screen_buffer: [u8; DISPLAY_BUFFER],
     mode: Lcd,
-    tiles: [Tile; NUM_TILES],
-    maps: [u8; TILE_MAP_SIZE],
+    tiles: [Tile; NUM_TILES * 2],
+    maps: [u8; TILE_MAP_SIZE * 2],
     lcd_regs: [u8; LCD_REG_SIZE],
     oam: [Sprite; NUM_OAM_SPRITES],
+    vbk: u8,
+    is_cgb: bool,
 }
 
 impl Ppu {
@@ -82,17 +84,24 @@ impl Ppu {
         Self {
             screen_buffer: [0; DISPLAY_BUFFER],
             mode: Lcd::new(),
-            tiles: [Tile::new(); NUM_TILES],
-            maps: [0; TILE_MAP_SIZE],
+            tiles: [Tile::new(); NUM_TILES * 2],
+            maps: [0; TILE_MAP_SIZE * 2],
             lcd_regs: [0; LCD_REG_SIZE],
             oam: [Sprite::new(); NUM_OAM_SPRITES],
+            vbk: 0,
+            is_cgb: false,
         }
     }
 
-    pub fn update(&mut self, cycles: u8) -> PpuUpdateResult {
+    pub fn set_cgb(&mut self, is_cgb: bool) {
+        self.is_cgb = is_cgb;
+    }
+
+    pub fn update(&mut self, m_cycles: u8) -> PpuUpdateResult {
+        let t_cycles = m_cycles * 4;
         let old_mode = self.mode.get_mode();
         let old_line = self.mode.get_line();
-        let lcd_result = self.mode.step(cycles);
+        let lcd_result = self.mode.step(t_cycles);
         let mut stat = self.read_lcd_reg(STAT);
         let mut irq = false;
 
@@ -128,34 +137,38 @@ impl Ppu {
     }
 
     pub fn read_vram(&self, addr: u16) -> u8 {
+        let bank_offset_tiles = if self.vbk & 1 == 1 { NUM_TILES } else { 0 };
+        let bank_offset_maps = if self.vbk & 1 == 1 { TILE_MAP_SIZE } else { 0 };
         match addr {
             TILE_SET_START..=TILE_SET_STOP => {
                 let relative_addr = addr - TILE_SET_START;
                 let tile_idx = relative_addr / BYTES_PER_TILE;
                 let offset = relative_addr % BYTES_PER_TILE;
-                self.tiles[tile_idx as usize].read_u8(offset)
+                self.tiles[tile_idx as usize + bank_offset_tiles].read_u8(offset)
             },
             TILE_MAP_START..=TILE_MAP_STOP => {
                 let relative_addr = addr - TILE_MAP_START;
-                self.maps[relative_addr as usize]
+                self.maps[relative_addr as usize + bank_offset_maps]
             },
-            _ => { unreachable!() }
+            _ => 0xFF
         }
     }
 
     pub fn write_vram(&mut self, addr: u16, val: u8) {
+        let bank_offset_tiles = if self.vbk & 1 == 1 { NUM_TILES } else { 0 };
+        let bank_offset_maps = if self.vbk & 1 == 1 { TILE_MAP_SIZE } else { 0 };
         match addr {
             TILE_SET_START..=TILE_SET_STOP => {
                 let relative_addr = addr - TILE_SET_START;
                 let tile_idx = relative_addr / BYTES_PER_TILE;
                 let offset = relative_addr % BYTES_PER_TILE;
-                self.tiles[tile_idx as usize].write_u8(offset, val);
+                self.tiles[tile_idx as usize + bank_offset_tiles].write_u8(offset, val);
             },
             TILE_MAP_START..=TILE_MAP_STOP => {
                 let relative_addr = addr - TILE_MAP_START;
-                self.maps[relative_addr as usize] = val;
+                self.maps[relative_addr as usize + bank_offset_maps] = val;
             },
-            _ => { unreachable!() }
+            _ => {}
         }
     }
 
@@ -179,6 +192,14 @@ impl Ppu {
     pub fn write_lcd_reg(&mut self, addr: u16, val: u8) {
         let relative_addr = addr - LCD_REG_START;
         self.lcd_regs[relative_addr as usize] = val;
+    }
+
+    pub fn read_vbk(&self) -> u8 {
+        if self.is_cgb { self.vbk | 0xFE } else { 0xFF }
+    }
+
+    pub fn write_vbk(&mut self, val: u8) {
+        if self.is_cgb { self.vbk = val & 1; }
     }
 
     fn is_lcd_enabled(&self) -> bool {

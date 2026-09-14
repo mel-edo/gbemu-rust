@@ -570,7 +570,7 @@ impl Apu {
             return;
         }
         
-        let cycles_u32 = cycles as u32;
+        let cycles_u32 = (cycles as u32) * 4;
         
         // Frame sequencer (8192 cycles = 512Hz)
         self.fs_timer += cycles_u32;

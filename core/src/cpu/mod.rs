@@ -340,6 +340,7 @@ impl Cpu {
         self.write_ram(self.sp + 1, val.high_byte());
     }
 
+    pub fn get_sp(&self) -> u16 { self.sp }
     pub fn get_pc(&self) -> u16 {
         self.pc
     }
@@ -521,6 +522,10 @@ impl Cpu {
 
     pub fn load_rom(&mut self, rom: &[u8]) {
         self.bus.load_rom(rom);
+        if self.bus.is_cgb() {
+            // It's a CGB game
+            self.set_r8(Regs::A, 0x11);
+        }
     }
 
     pub fn render(&self) -> [u8; DISPLAY_BUFFER] {

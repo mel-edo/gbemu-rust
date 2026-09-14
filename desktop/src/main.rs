@@ -1,9 +1,22 @@
 mod debug;
 
-use gb_core::{cpu::Cpu, io::Buttons, utils::{DISPLAY_BUFFER, SCREEN_HEIGHT, SCREEN_WIDTH}};
-use sdl2::{event::Event, keyboard::Keycode, pixels::Color, rect::Rect, render::Canvas, video::Window, audio::AudioSpecDesired};
-use std::{env, fs::{File, OpenOptions}, io::{Read, Write}, path::Path, process::exit};
 use crate::debug::Debugger;
+use gb_core::{
+    cpu::Cpu,
+    io::Buttons,
+    utils::{DISPLAY_BUFFER, SCREEN_HEIGHT, SCREEN_WIDTH},
+};
+use sdl2::{
+    audio::AudioSpecDesired, event::Event, keyboard::Keycode, pixels::Color, rect::Rect,
+    render::Canvas, video::Window,
+};
+use std::{
+    env,
+    fs::{File, OpenOptions},
+    io::{Read, Write},
+    path::Path,
+    process::exit,
+};
 
 const SCALE: u32 = 3;
 const WINDOW_WIDTH: u32 = (SCREEN_WIDTH as u32) * SCALE;
@@ -28,16 +41,23 @@ fn main() {
 
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
-    
+
     let audio_subsystem = sdl_context.audio().unwrap();
     let desired_spec = AudioSpecDesired {
         freq: Some(44100),
-        channels: Some(2), // stereo
+        channels: Some(2),   // stereo
         samples: Some(2048), // buffer size
     };
-    let audio_queue = audio_subsystem.open_queue::<f32, _>(None, &desired_spec).unwrap();
+    let audio_queue = audio_subsystem
+        .open_queue::<f32, _>(None, &desired_spec)
+        .unwrap();
     audio_queue.resume();
-    let window = video_subsystem.window(title, WINDOW_WIDTH, WINDOW_HEIGHT).position_centered().opengl().build().unwrap();
+    let window = video_subsystem
+        .window(title, WINDOW_WIDTH, WINDOW_HEIGHT)
+        .position_centered()
+        .opengl()
+        .build()
+        .unwrap();
     let mut canvas = window.into_canvas().present_vsync().build().unwrap();
     canvas.clear();
     canvas.present();
@@ -46,30 +66,42 @@ fn main() {
     'gameloop: loop {
         for event in events.poll_iter() {
             match event {
-                Event::Quit{..} |
-                Event::KeyDown{keycode: Some(Keycode::Escape), ..} => {
+                Event::Quit { .. }
+                | Event::KeyDown {
+                    keycode: Some(Keycode::Escape),
+                    ..
+                } => {
                     break 'gameloop;
-                },
-                Event::KeyDown {keycode: Some(Keycode::Space), ..} => {
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::Space),
+                    ..
+                } => {
                     gbd.set_debugging(true);
-                },
-                Event::KeyDown {keycode: Some(keycode), ..} => {
+                }
+                Event::KeyDown {
+                    keycode: Some(keycode),
+                    ..
+                } => {
                     if let Some(button) = key2btn(keycode) {
                         gb.press_button(button, true);
                     }
-                },
-                Event::KeyUp{keycode: Some(keycode), ..} => {
+                }
+                Event::KeyUp {
+                    keycode: Some(keycode),
+                    ..
+                } => {
                     if let Some(button) = key2btn(keycode) {
                         gb.press_button(button, false);
                     }
-                },
+                }
                 _ => {}
             }
         }
 
         // keep ticking until told to stop
         tick_until_draw(&mut gb, &mut gbd, &gamename);
-        
+
         if !gb.bus.apu.audio_buffer.is_empty() {
             audio_queue.queue_audio(&gb.bus.apu.audio_buffer).unwrap();
             gb.bus.apu.audio_buffer.clear();
@@ -128,7 +160,11 @@ fn write_battery_save(gb: &mut Cpu, gamename: &str) {
         let mut filename = gamename.to_owned();
         filename.push_str(".sav");
 
-        let mut file = OpenOptions::new().write(true).create(true).open(filename).expect("Error opening save file");
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(filename)
+            .expect("Error opening save file");
         file.write_all(battery_data).unwrap();
         gb.clean_battery();
     }
@@ -142,7 +178,9 @@ fn load_battery_save(gb: &mut Cpu, gamename: &str) {
 
         let f = OpenOptions::new().read(true).open(filename);
         if f.is_ok() {
-            f.unwrap().read_to_end(&mut battery_data).expect("Error reading save file");
+            f.unwrap()
+                .read_to_end(&mut battery_data)
+                .expect("Error reading save file");
             gb.bus.set_battery_data(&battery_data);
         }
     }
@@ -150,14 +188,14 @@ fn load_battery_save(gb: &mut Cpu, gamename: &str) {
 
 fn key2btn(key: Keycode) -> Option<Buttons> {
     match key {
-        Keycode::Down => { Some(Buttons::Down) },
-        Keycode::Up => { Some(Buttons::Up) },
-        Keycode::Left => { Some(Buttons::Left) },
-        Keycode::Right => { Some(Buttons::Right) },
-        Keycode::Return => { Some(Buttons::Start) },
-        Keycode::Backspace => { Some(Buttons::Select) },
-        Keycode::X => { Some(Buttons::A) },
-        Keycode::Z => { Some(Buttons::B) },
-        _ => { None },
+        Keycode::Down => Some(Buttons::Down),
+        Keycode::Up => Some(Buttons::Up),
+        Keycode::Left => Some(Buttons::Left),
+        Keycode::Right => Some(Buttons::Right),
+        Keycode::Return => Some(Buttons::Start),
+        Keycode::Backspace => Some(Buttons::Select),
+        Keycode::X => Some(Buttons::A),
+        Keycode::Z => Some(Buttons::B),
+        _ => None,
     }
 }

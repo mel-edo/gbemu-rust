@@ -139,14 +139,38 @@ impl Cart {
     }
 
     pub fn read_cart(&self, addr: u16) -> u8 {
-        if (addr as usize) < ROM_BANK_SIZE {
-            self.rom[addr as usize]
-        } else {
+        if self.mbc == MBC::MBC1 {
             let num_banks = self.rom.len() / ROM_BANK_SIZE;
-            let masked_bank = self.rom_bank as usize % num_banks;
-            let rel_addr = (addr as usize) - ROM_BANK_SIZE;
-            let bank_addr = masked_bank * ROM_BANK_SIZE + rel_addr;
-            self.rom[bank_addr]
+            if (addr as usize) < ROM_BANK_SIZE {
+                let bank = if !self.rom_mode {
+                    (self.ram_bank as usize) << 5
+                } else {
+                    0
+                };
+                let masked_bank = bank % num_banks;
+                let bank_addr = masked_bank * ROM_BANK_SIZE + (addr as usize);
+                self.rom[bank_addr]
+            } else {
+                let mut low = self.rom_bank as usize;
+                if low == 0 {
+                    low = 1;
+                }
+                let bank = low | ((self.ram_bank as usize) << 5);
+                let masked_bank = bank % num_banks;
+                let rel_addr = (addr as usize) - ROM_BANK_SIZE;
+                let bank_addr = masked_bank * ROM_BANK_SIZE + rel_addr;
+                self.rom[bank_addr]
+            }
+        } else {
+            if (addr as usize) < ROM_BANK_SIZE {
+                self.rom[addr as usize]
+            } else {
+                let num_banks = self.rom.len() / ROM_BANK_SIZE;
+                let masked_bank = self.rom_bank as usize % num_banks;
+                let rel_addr = (addr as usize) - ROM_BANK_SIZE;
+                let bank_addr = masked_bank * ROM_BANK_SIZE + rel_addr;
+                self.rom[bank_addr]
+            }
         }
     }
 
@@ -193,32 +217,25 @@ impl Cart {
         from_utf8(&data[..end]).unwrap_or("Unknown")
     }
 
+    pub fn is_cgb(&self) -> bool {
+        if self.rom.len() > 0x143 {
+            let flag = self.rom[0x143];
+            flag == 0x80 || flag == 0xC0
+        } else {
+            false
+        }
+    }
+
     fn mbc1_write_rom(&mut self, addr: u16, val: u8) {
         match addr {
             RAM_ENABLE_START..=RAM_ENABLE_STOP => {
                 self.ram_enabled = val == 0x0A;
             },
             ROM_BANK_NUM_START..=ROM_BANK_NUM_STOP => {
-                let bank = (val & 0x1F) as u16;
-                match bank {
-                    // Bank numbers 0x00, 0x20, 0x40, 0x60 aren't used
-                    // instead they load the next bank
-                    0x00 | 0x20 | 0x40 | 0x60 => {
-                        self.rom_bank = bank + 1;
-                    },
-                    _ => {
-                        self.rom_bank = bank;
-                    }
-                }
+                self.rom_bank = (val & 0x1F) as u16;
             },
             RAM_BANK_NUM_START..=RAM_BANK_NUM_STOP => {
-                let bits = val & 0b11;
-
-                if self.rom_mode {
-                    self.rom_bank = (self.rom_bank & 0x1F) | ((bits as u16) << 5);
-                } else {
-                    self.ram_bank = bits;
-                }
+                self.ram_bank = val & 0b11;
             },
             ROM_RAM_MODE_START..=ROM_RAM_MODE_STOP => {
                 self.rom_mode = val == 0;
