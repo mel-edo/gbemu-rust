@@ -54,24 +54,30 @@ impl IO {
     }
 
     fn read_joypad(&self) -> u8 {
-        if self.face_selected == self.dpad_selected {
-            return 0;
-        }
+        let mut ret = 0x0F;
 
-        let mut ret = 0;
         if self.dpad_selected {
             for btn in DPAD_BUTTONS {
                 let idx = btn as usize;
-                let mask = (if self.buttons[idx] { 0 } else { 1 }) << (idx - 4);
-                ret |= mask;
-            }
-        } else {
-            for btn in FACE_BUTTONS {
-                let idx = btn as usize;
-                let mask = (if self.buttons[idx] { 0 } else { 1 }) << idx;
-                ret |= mask;
+                if self.buttons[idx] {
+                    ret &= !(1 << (idx - 4));
+                }
             }
         }
+
+        if self.face_selected {
+            for btn in FACE_BUTTONS {
+                let idx = btn as usize;
+                if self.buttons[idx] {
+                    ret &= !(1 << idx);
+                }
+            }
+        }
+
+        ret |= (if self.dpad_selected { 0 } else { 1 }) << DPAD_SELECT_BIT;
+        ret |= (if self.face_selected { 0 } else { 1 }) << FACE_SELECT_BIT;
+        ret |= 0xC0; // Bits 6 and 7 are always 1
+
         ret
     }
 

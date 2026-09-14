@@ -87,8 +87,8 @@ fn key2btn(key: &str) -> Option<Buttons> {
         "ArrowLeft" => { Some(Buttons::Left) },
         "Enter" => { Some(Buttons::Start) },
         "Backspace" => { Some(Buttons::Select) },
-        "x" => { Some(Buttons::A) },
-        "z" => { Some(Buttons::B) },
+        "x" | "X" => { Some(Buttons::A) },
+        "z" | "Z" => { Some(Buttons::B) },
         _ => { None },
     }
 }

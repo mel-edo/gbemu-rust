@@ -13,6 +13,7 @@ ctx.fillStyle = "#FFFFFF"
 ctx.fillRect(0, 0, canvas.width, canvas.height)
 
 let anim_frame = 0
+let fast_forward = false
 
 let audioCtx = null;
 let audioStartTime = 0;
@@ -33,7 +34,7 @@ async function run() {
         if (anim_frame != 0) {
             window.cancelAnimationFrame(anim_frame)
         }
-        
+
         let file = e.target.files[0]
         if (!file) {
             alert("Failed to read file")
@@ -55,54 +56,71 @@ async function run() {
         fr.readAsArrayBuffer(file)
     }, false)
 
-    document.addEventListener("keydown", function(e) {
+    document.addEventListener("keydown", function (e) {
+        if (e.key === "Shift") { fast_forward = true; return; }
         gb.press_button(e, true)
     })
 
-    document.addEventListener("keyup", function(e) {
+    document.addEventListener("keyup", function (e) {
+        if (e.key === "Shift") { fast_forward = false; return; }
         gb.press_button(e, false)
     })
 }
 
 function mainloop(gb) {
-    while (true) {
-        let draw_time = gb.tick()
-        if (draw_time) {
-            gb.draw_screen()
-            if (SCALE != 1) {
-                let ctx = canvas.getContext('2d')
-                ctx.imageSmoothingEnabled = false
-                ctx.drawImage(canvas, 0, 0, WIDTH, HEIGHT, 0, 0, canvas.width, canvas.height)
-            }
-
-            let samples = gb.get_audio_samples();
-            if (samples.length > 0 && audioCtx) {
-                let buffer = audioCtx.createBuffer(2, samples.length / 2, 44100);
-                let leftChannel = buffer.getChannelData(0);
-                let rightChannel = buffer.getChannelData(1);
-                
-                for (let i = 0; i < samples.length / 2; i++) {
-                    leftChannel[i] = samples[i * 2];
-                    rightChannel[i] = samples[i * 2 + 1];
+    let ticks = fast_forward ? 4 : 1;
+    for (let t = 0; t < ticks; t++) {
+        while (true) {
+            let draw_time = gb.tick()
+            if (draw_time) {
+                if (t === ticks - 1) {
+                    gb.draw_screen()
+                    if (SCALE != 1) {
+                        let ctx = canvas.getContext('2d')
+                        ctx.imageSmoothingEnabled = false
+                        ctx.drawImage(canvas, 0, 0, WIDTH, HEIGHT, 0, 0, canvas.width, canvas.height)
+                    }
                 }
-                
-                let source = audioCtx.createBufferSource();
-                source.buffer = buffer;
-                source.connect(audioCtx.destination);
-                
-                if (audioStartTime < audioCtx.currentTime) {
-                    audioStartTime = audioCtx.currentTime;
-                }
-                
-                source.start(audioStartTime);
-                audioStartTime += buffer.duration;
-            }
 
-            anim_frame = window.requestAnimationFrame(() => {
-                mainloop(gb)
-            })
-            return
+                let samples = gb.get_audio_samples();
+                if (!fast_forward && samples.length > 0 && audioCtx) {
+                    let buffer = audioCtx.createBuffer(2, samples.length / 2, 44100);
+                    let leftChannel = buffer.getChannelData(0);
+                    let rightChannel = buffer.getChannelData(1);
+
+                    for (let i = 0; i < samples.length / 2; i++) {
+                        leftChannel[i] = samples[i * 2];
+                        rightChannel[i] = samples[i * 2 + 1];
+                    }
+
+                    let source = audioCtx.createBufferSource();
+                    source.buffer = buffer;
+                    source.connect(audioCtx.destination);
+
+                    if (audioStartTime < audioCtx.currentTime) {
+                        audioStartTime = audioCtx.currentTime;
+                    }
+
+                    source.start(audioStartTime);
+                    audioStartTime += buffer.duration;
+                }
+                break;
+            }
         }
+    }
+
+    // If audio is too far ahead (e.g. > 50ms), wait before scheduling the next frame
+    let delay = 0;
+    if (!fast_forward && audioCtx && (audioStartTime - audioCtx.currentTime) > 0.05) {
+        delay = Math.max(0, (audioStartTime - audioCtx.currentTime - 0.05) * 1000);
+    }
+
+    if (delay > 0) {
+        setTimeout(() => {
+            anim_frame = window.requestAnimationFrame(() => { mainloop(gb) })
+        }, delay);
+    } else {
+        anim_frame = window.requestAnimationFrame(() => { mainloop(gb) })
     }
 }
 

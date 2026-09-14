@@ -63,6 +63,7 @@ fn main() {
     canvas.present();
 
     let mut events = sdl_context.event_pump().unwrap();
+    let mut fast_forward = false;
     'gameloop: loop {
         for event in events.poll_iter() {
             match event {
@@ -79,18 +80,14 @@ fn main() {
                 } => {
                     gbd.set_debugging(true);
                 }
-                Event::KeyDown {
-                    keycode: Some(keycode),
-                    ..
-                } => {
+                Event::KeyDown { keycode: Some(Keycode::LShift), .. } | Event::KeyDown { keycode: Some(Keycode::RShift), .. } => { fast_forward = true; }
+                Event::KeyDown { keycode: Some(keycode), .. } => {
                     if let Some(button) = key2btn(keycode) {
                         gb.press_button(button, true);
                     }
                 }
-                Event::KeyUp {
-                    keycode: Some(keycode),
-                    ..
-                } => {
+                Event::KeyUp { keycode: Some(Keycode::LShift), .. } | Event::KeyUp { keycode: Some(Keycode::RShift), .. } => { fast_forward = false; }
+                Event::KeyUp { keycode: Some(keycode), .. } => {
                     if let Some(button) = key2btn(keycode) {
                         gb.press_button(button, false);
                     }
@@ -99,17 +96,22 @@ fn main() {
             }
         }
 
-        // keep ticking until told to stop
-        tick_until_draw(&mut gb, &mut gbd, &gamename);
+        let ticks = if fast_forward { 4 } else { 1 };
+        for _ in 0..ticks {
+            // keep ticking until told to stop
+            tick_until_draw(&mut gb, &mut gbd, &gamename);
 
-        while audio_queue.size() > 16384 {
-            std::thread::sleep(std::time::Duration::from_millis(1));
-        }
-
-        if !gb.bus.apu.audio_buffer.is_empty() {
-            audio_queue.queue_audio(&gb.bus.apu.audio_buffer).unwrap();
+            if !fast_forward {
+                while audio_queue.size() > 16384 {
+                    std::thread::sleep(std::time::Duration::from_millis(1));
+                }
+                if !gb.bus.apu.audio_buffer.is_empty() {
+                    audio_queue.queue_audio(&gb.bus.apu.audio_buffer).unwrap();
+                }
+            }
             gb.bus.apu.audio_buffer.clear();
         }
+        
         let frame = gb.render();
         draw_screen(&frame, &mut canvas);
     }
