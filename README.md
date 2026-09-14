@@ -1,5 +1,7 @@
 ## Gameboy emulator using Rust
 
+> 🎮 **Play it in your browser:** The WebAssembly build of this emulator is hosted on my personal site! **[Try the emulator here](https://mel-edo.github.io/emulator.html)**.
+
 ### Work in progress
 
 ## Helpful resources
@@ -10,10 +12,17 @@
 - [Ultimate gameboy talk](https://www.youtube.com/watch?v=HyzD8pNlpwI)
 - [Homebrew titles for testing](https://opusgames.com/games/GBDev/GBDev.html)
 
+### Structure
+
+The emulator is split into three main components:
+- `core`: The main emulator logic (CPU, Memory Bus, PPU, APU).
+- `desktop`: Native frontend using SDL2 for rendering and input.
+- `wasm`: WebAssembly bindings for running the emulator in a web browser, complete with an HTML frontend.
+
 ### Prerequisites
 
+#### Desktop (SDL2)
 - Rust
-
 - SDL2 development libraries
 
 On Arch:
@@ -21,13 +30,31 @@ On Arch:
 sudo pacman -S sdl2
 ```
 
-### Installation
+#### WebAssembly (Browser)
+- `wasm-pack` (install via `cargo install wasm-pack`)
+- A local web server (e.g., `python3 -m http.server`)
 
+### Building and Running
+
+#### Desktop
 ```
 git clone https://github.com/mel-edo/gbemu-rust.git
-cd gbemu-rust
-cargo build --release
+cd gbemu-rust/desktop
+cargo run --release -- path/to/rom.gb
 ```
+
+#### WebAssembly
+```
+git clone https://github.com/mel-edo/gbemu-rust.git
+cd gbemu-rust/wasm
+wasm-pack build --target web
+```
+Then, serve the `html` directory (which uses the compiled Wasm):
+```
+cd ../html
+python3 -m http.server 8000
+```
+Open `http://localhost:8000` in your browser.
 
 ## Contributing
 
