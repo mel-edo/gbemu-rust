@@ -2,12 +2,13 @@ const HBLANK_LEN: usize = 204;
 const VBLANK_LEN: usize = 456;
 const OAM_READ_LEN: usize = 80;
 const VRAM_READ_LEN: usize = 172;
-const VBLANK_LINE_START: u8 = 143;
-const VBLANK_LINE_END: u8 = VBLANK_LINE_START + 10;
+const VBLANK_LINE_START: u8 = 144;
+const VBLANK_LINE_END: u8 = 153;
 
 #[derive(PartialEq)]
 pub enum LcdResults {
     NoAction,
+    RenderLine,
     RenderFrame,
 }
 
@@ -52,6 +53,7 @@ impl Lcd {
                 if self.cycles >= VRAM_READ_LEN {
                     self.cycles = 0;
                     self.mode = LcdModeType::HBLANK;
+                    result = LcdResults::RenderLine;
                 }
             }
         }

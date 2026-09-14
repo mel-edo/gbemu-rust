@@ -1,4 +1,4 @@
-use std::{io::*, cmp::min};
+use std::io::*;
 use gb_core::cpu::*;
 
 const OPCODE_NAMES: [&str; 0x100] = [
@@ -149,7 +149,7 @@ impl Debugger {
     fn print_ram(&self, gb: &Cpu, mem: Option<u16>) {
         if let Some(addr) = mem {
             // Print 16 bytes starting at addr
-            let end = min(addr + 16, 0xFFFF);
+            let end = addr.saturating_add(16).min(0xFFFF);
             let mut output = String::new();
             for i in addr..end {
                 let val = gb.read_ram(i);

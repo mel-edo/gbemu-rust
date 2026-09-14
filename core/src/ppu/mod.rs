@@ -293,7 +293,7 @@ impl Ppu {
             let y_flipped = spr.is_y_flipped();
             
             let spr_idx = if is_8x16 {
-                if (y < 8 && !y_flipped) || (8 < y && y_flipped) {
+                if (y < 8 && !y_flipped) || (y >= 8 && y_flipped) {
                     spr.get_tile_num() & 0xFE
                 } else {
                     spr.get_tile_num() | 0x01
@@ -310,7 +310,7 @@ impl Ppu {
             data_y %= 8;
             let row = tile.get_row(data_y as u8);
             for x in 0..8 {
-                let data_x = if spr.is_x_flipped() { 7 - x } else { y };
+                let data_x = if spr.is_x_flipped() { 7 - x } else { x };
                 let cell = row[data_x as usize];
                 // continue if pixel is transparent
                 if cell == 0 {
@@ -382,8 +382,9 @@ impl Ppu {
         let y = (line - coords.y) as usize; 
         let row = y % TILESIZE;
         for x in (coords.x as usize)..SCREEN_WIDTH {
-            let col = x % TILESIZE;
-            let map_num = (y / TILESIZE) * LAYERSIZE + (x / TILESIZE);
+            let win_x = x - coords.x as usize;
+            let col = win_x % TILESIZE;
+            let map_num = (y / TILESIZE) * LAYERSIZE + (win_x / TILESIZE);
             let tile_index = self.maps[map_offset + map_num] as usize;
             let adjusted_tile_index = if self.get_bg_wndw_tile_set_index() == 1 {
                 tile_index as usize
@@ -395,11 +396,11 @@ impl Ppu {
             let cell = data[col];
             let color_idx = palette[cell as usize];
             let color = GB_PALETTE[color_idx as usize];
-            let buffer_idx = 4 * (y * SCREEN_WIDTH + x);
+            // let buffer_idx = 4 * (y * SCREEN_WIDTH + x);
+            let buffer_idx = 4 * x;
             for i in 0..4 {
                 buffer[buffer_idx + i] = color[i];
             }
         }
-        
     }
 }

@@ -2,7 +2,7 @@ mod debug;
 
 use gb_core::{cpu::Cpu, io::Buttons, utils::{DISPLAY_BUFFER, SCREEN_HEIGHT, SCREEN_WIDTH}};
 use sdl2::{event::Event, keyboard::Keycode, pixels::Color, rect::Rect, render::Canvas, video::Window};
-use std::{env, fs::File, io::Read, process::exit};
+use std::{env, fs::{File, OpenOptions}, io::{Read, Write}, path::Path, process::exit};
 use crate::debug::Debugger;
 
 const SCALE: u32 = 3;
@@ -18,9 +18,12 @@ fn main() {
 
     let mut gbd = Debugger::new();
     let mut gb = Cpu::new();
+    let filepath = Path::new(&args[1]);
+    let gamename = filepath.file_stem().unwrap().to_str().unwrap().to_owned();
     let filename = &args[1];
     let rom = load_rom(filename);
     gb.load_rom(&rom);
+    load_battery_save(&mut gb, &gamename);
     let title = gb.get_title();
 
     let sdl_context = sdl2::init().unwrap();
@@ -56,7 +59,7 @@ fn main() {
         }
 
         // keep ticking until told to stop
-        tick_until_draw(&mut gb, &mut gbd);
+        tick_until_draw(&mut gb, &mut gbd, &gamename);
         let frame = gb.render();
         draw_screen(&frame, &mut canvas);
     }
@@ -83,7 +86,7 @@ fn draw_screen(data: &[u8], canvas: &mut Canvas<Window>) {
     canvas.present();
 }
 
-fn tick_until_draw(gb: &mut Cpu, gbd: &mut Debugger) {
+fn tick_until_draw(gb: &mut Cpu, gbd: &mut Debugger, gamename: &str) {
     loop {
         let render = gb.tick();
 
@@ -98,6 +101,35 @@ fn tick_until_draw(gb: &mut Cpu, gbd: &mut Debugger) {
 
         if render {
             break;
+        }
+    }
+    if gb.is_battery_dirty() {
+        write_battery_save(gb, gamename);
+    }
+}
+
+fn write_battery_save(gb: &mut Cpu, gamename: &str) {
+    if gb.bus.has_battery() {
+        let battery_data = gb.bus.get_battery_data();
+        let mut filename = gamename.to_owned();
+        filename.push_str(".sav");
+
+        let mut file = OpenOptions::new().write(true).create(true).open(filename).expect("Error opening save file");
+        file.write_all(battery_data).unwrap();
+        gb.clean_battery();
+    }
+}
+
+fn load_battery_save(gb: &mut Cpu, gamename: &str) {
+    if gb.bus.has_battery() {
+        let mut battery_data: Vec<u8> = Vec::new();
+        let mut filename = gamename.to_owned();
+        filename.push_str(".sav");
+
+        let f = OpenOptions::new().read(true).open(filename);
+        if f.is_ok() {
+            f.unwrap().read_to_end(&mut battery_data).expect("Error reading save file");
+            gb.bus.set_battery_data(&battery_data);
         }
     }
 }

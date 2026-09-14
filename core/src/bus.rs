@@ -70,7 +70,8 @@ impl Bus {
         self.io.set_button(button, pressed);
     }
 
-    pub fn write_ram(&mut self, addr: u16, val: u8) {
+    pub fn write_ram(&mut self, addr: u16, val: u8) -> bool {
+        let mut battery_write = false;
         match addr {
             ROM_START..=ROM_STOP => {
                 self.rom.write_cart(addr, val);
@@ -80,6 +81,7 @@ impl Bus {
             },
             EXT_RAM_START..=EXT_RAM_STOP => {
                 self.rom.write_ram(addr, val);
+                battery_write = true;
             }
             WRAM_START..=ECHO_STOP => {
                 self.wram.write_u8(addr, val);
@@ -102,6 +104,7 @@ impl Bus {
             },
             _ => {}
         }
+        battery_write
     }
 
     pub fn update_ppu(&mut self, cycles: u8) -> PpuUpdateResult {
@@ -130,5 +133,17 @@ impl Bus {
 
     pub fn get_title(&self) -> &str {
         self.rom.get_title()
+    }
+
+    pub fn get_battery_data(&self) -> &[u8] {
+        self.rom.get_battery_data()
+    }
+
+    pub fn has_battery(&self) -> bool {
+        self.rom.has_battery()
+    }
+
+    pub fn set_battery_data(&mut self, data: &[u8]) {
+        self.rom.set_battery_data(data);
     }
 }

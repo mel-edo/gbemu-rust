@@ -21,6 +21,10 @@ const RAM_BANK_NUM_START: u16 = 0x4000;
 const RAM_BANK_NUM_STOP: u16 = 0x5FFF;
 const ROM_RAM_MODE_START: u16 = 0x6000;
 const ROM_RAM_MODE_STOP: u16 = 0x7FFF;
+const ROM_BANK_LOW_START: u16 = 0x2000;
+const ROM_BANK_LOW_STOP: u16 = 0x2FFF;
+const ROM_BANK_HIGH_START: u16 = 0x3000;
+const ROM_BANK_HIGH_STOP: u16 = 0x3FFF;
 
 const CART_TYPE_ADDR: usize = 0x0147;
 const RAM_SIZE_ADDR: usize = 0x0149;
@@ -57,6 +61,7 @@ pub struct Cart {
     rtc: Rtc,
     rom_mode: bool,
     ram_enabled: bool,
+    latch_pending: bool,
 }
 
 impl Cart {
@@ -70,6 +75,7 @@ impl Cart {
             rtc: Rtc::new(),
             rom_mode: true,
             ram_enabled: false,
+            latch_pending: false,
         }
     }
 
@@ -136,8 +142,10 @@ impl Cart {
         if (addr as usize) < ROM_BANK_SIZE {
             self.rom[addr as usize]
         } else {
+            let num_banks = self.rom.len() / ROM_BANK_SIZE;
+            let masked_bank = self.rom_bank as usize % num_banks;
             let rel_addr = (addr as usize) - ROM_BANK_SIZE;
-            let bank_addr = (self.rom_bank as usize) * ROM_BANK_SIZE + rel_addr;
+            let bank_addr = masked_bank * ROM_BANK_SIZE + rel_addr;
             self.rom[bank_addr]
         }
     }
@@ -148,13 +156,14 @@ impl Cart {
             MBC::MBC1 => { self.mbc1_write_rom(addr, val); },
             MBC::MBC2 => { self.mbc2_write_rom(addr, val); },
             MBC::MBC3 => { self.mbc3_write_rom(addr, val); },
+            MBC::MBC5 => { self.mbc5_write_rom(addr, val); },
             _ => unimplemented!()
         }
     }
 
     pub fn read_ram(&self, addr: u16) -> u8 {
         match self.mbc {
-            MBC::NONE | MBC::MBC1 | MBC::MBC2 => {
+            MBC::NONE | MBC::MBC1 | MBC::MBC2 | MBC::MBC5 => {
                 self.read_ram_helper(addr)
             },
             MBC::MBC3 => {
@@ -167,10 +176,12 @@ impl Cart {
     pub fn write_ram(&mut self, addr: u16, val: u8) {
         match self.mbc {
             MBC::NONE => {
-                let rel_addr = addr - EXT_RAM_START;
-                self.ram[rel_addr as usize] = val;
+                if !self.ram.is_empty() && self.ram_enabled {
+                    let rel_addr = addr - EXT_RAM_START;
+                    self.ram[rel_addr as usize] = val;
+                }
             },
-            MBC::MBC1 | MBC::MBC2 => self.write_ram_helper(addr, val),
+            MBC::MBC1 | MBC::MBC2 | MBC::MBC5 => self.write_ram_helper(addr, val),
             MBC::MBC3 => self.mbc3_write_ram(addr, val),
             _ => unimplemented!()
         }
@@ -178,7 +189,8 @@ impl Cart {
 
     pub fn get_title(&self) -> &str {
         let data = &self.rom[TITLE_START..TITLE_STOP];
-        from_utf8(data).unwrap().trim_end_matches(char::from(0))
+        let end = data.iter().position(|&b| b == 0).unwrap_or(data.len());
+        from_utf8(&data[..end]).unwrap_or("Unknown")
     }
 
     fn mbc1_write_rom(&mut self, addr: u16, val: u8) {
@@ -203,7 +215,7 @@ impl Cart {
                 let bits = val & 0b11;
 
                 if self.rom_mode {
-                    self.rom_bank |= (bits << 5) as u16;
+                    self.rom_bank = (self.rom_bank & 0x1F) | ((bits as u16) << 5);
                 } else {
                     self.ram_bank = bits;
                 }
@@ -218,7 +230,8 @@ impl Cart {
     fn mbc2_write_rom(&mut self, addr: u16, val: u8) {
         let bank_swap = addr.get_bit(MBC2_ROM_CONTROL_BIT);
         if bank_swap {
-            self.rom_bank = (val & 0x0F) as u16;
+            let bank = (val & 0x0F) as u16;
+            self.rom_bank = if bank == 0 { 1 } else { bank };
         } else {
             self.ram_enabled = val == 0x0A;
         }
@@ -240,7 +253,14 @@ impl Cart {
                 self.ram_bank = val;
             },
             ROM_RAM_MODE_START..=ROM_RAM_MODE_STOP => {
-                self.rtc.write_byte(self.ram_bank, val);
+                if val == 0x00 {
+                    self.latch_pending = true;
+                } else if val == 0x01 && self.latch_pending {
+                    self.rtc.latch_time();
+                    self.latch_pending = false;
+                } else {
+                    self.latch_pending = false;
+                }
             },
             _ => unreachable!()
         }
@@ -269,7 +289,7 @@ impl Cart {
     }
 
     fn mbc3_read_ram(&self, addr: u16) -> u8 {
-        if self.rtc.is_enabled() && (0x08 >= self.ram_bank && self.ram_bank <= 0x0C) {
+        if self.ram_bank >= 0x08 && self.ram_bank <= 0x0C {
             self.rtc.read_byte(self.ram_bank)
         } else {
             self.read_ram_helper(addr)
@@ -277,8 +297,38 @@ impl Cart {
     }
 
     fn read_ram_helper(&self, addr: u16) -> u8 {
+        if self.ram.is_empty() || !self.ram_enabled {
+            return 0xFF;
+        }
         let rel_addr = (addr - EXT_RAM_START) as usize;
         let bank_addr = (self.ram_bank as usize) * RAM_BANK_SIZE + rel_addr;
         self.ram[bank_addr]
+    }
+
+    fn mbc5_write_rom(&mut self, addr: u16, val: u8) {
+        match addr {
+            RAM_ENABLE_START..=RAM_ENABLE_STOP => {
+                self.ram_enabled = val == 0x0A;
+            },
+            ROM_BANK_LOW_START..=ROM_BANK_LOW_STOP => {
+                self.rom_bank &= 0xFF00;
+                self.rom_bank |= val as u16;
+            },
+            ROM_BANK_HIGH_START..=ROM_BANK_HIGH_STOP => {
+                self.rom_bank.set_bit(8, val.get_bit(0));
+            },
+            RAM_BANK_NUM_START..=RAM_BANK_NUM_STOP => {
+                self.ram_bank = val & 0x0F;
+            },
+            _ => unreachable!()
+        }
+    }
+
+    pub fn get_battery_data(&self) -> &[u8] {
+        &self.ram
+    }
+
+    pub fn set_battery_data(&mut self, data: &[u8]) {
+        self.ram.copy_from_slice(data);
     }
 }

@@ -94,6 +94,17 @@ impl IO {
                 self.face_selected = !val.get_bit(FACE_SELECT_BIT);
                 self.dpad_selected = !val.get_bit(DPAD_SELECT_BIT);
             },
+            0xFF01 => {
+                let relative_addr = addr - IO_START;
+                self.ram[relative_addr as usize] = val;
+            },
+            0xFF02 => {
+                let relative_addr = addr - IO_START;
+                self.ram[relative_addr as usize] = val;
+                if val == 0x81 {
+                    print!("{}", self.ram[(0xFF01 - IO_START) as usize] as char);
+                }
+            },
             _ => {
                 let relative_addr = addr - IO_START;
                 self.ram[relative_addr as usize] = val;

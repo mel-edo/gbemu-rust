@@ -17,7 +17,7 @@ pub struct Rtc {
     minutes: u8,
     hours: u8,
     days: u16,
-    enabled: bool,
+    overflow: bool,
     halted: bool,
 }
 
@@ -29,12 +29,15 @@ impl Rtc {
             minutes: 0,
             hours: 0,
             days: 0,
-            enabled: false,
+            overflow: false,
             halted: false,
         }
     }
 
     pub fn latch_time(&mut self) {
+        if self.halted {
+            return;
+        }
         let now = Instant::now();
         let delta = now.duration_since(self.start);
         let d_sec = delta.as_secs();
@@ -48,11 +51,10 @@ impl Rtc {
         self.hours = (d_hour % HOURS_IN_DAY) as u8;
 
         let d_days = d_hour / HOURS_IN_DAY;
-        self.days = d_days as u16;
-    }
-
-    pub fn is_enabled(&self) -> bool {
-        self.enabled
+        if d_days > 511 {
+            self.overflow = true;
+        }
+        self.days = (d_days % 512) as u16;
     }
 
     pub fn read_byte(&self, bank: u8) -> u8 {
@@ -63,7 +65,7 @@ impl Rtc {
             0x0B => { (self.days & 0xFF) as u8 },
             0x0C => {
                 let mut ret = 0;
-                ret.set_bit(DAY_HIGH_BIT, self.days.get_bit(9));
+                ret.set_bit(DAY_HIGH_BIT, self.days.get_bit(8));
                 ret.set_bit(HALT_BIT, self.halted);
                 ret.set_bit(DAY_OVERFLOW_BIT, self.days.get_bit(10));
                 ret
@@ -81,18 +83,11 @@ impl Rtc {
                 self.days = (self.days & 0xFF00) | (val as u16);
             },
             0x0C => {
-                self.days.set_bit(9, val.get_bit(DAY_HIGH_BIT));
+                self.days.set_bit(8, val.get_bit(DAY_HIGH_BIT));
                 self.halted = val.get_bit(HALT_BIT);
-                self.days.set_bit(10, val.get_bit(DAY_OVERFLOW_BIT));
+                self.overflow = val.get_bit(DAY_OVERFLOW_BIT);
             },
-            _ => {
-                if val == 0x00 {
-                    self.enabled = false;
-                } else if val == 0x01 && !self.enabled {
-                    self.enabled = true;
-                    self.latch_time();
-                }
-            }
+            _ => unreachable!()
         }
     }
 }

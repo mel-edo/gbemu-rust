@@ -17,9 +17,10 @@ pub struct Cpu {
     l: u8,
     irq_enabled: bool,
     halted: bool,
-    bus: Bus,
+    pub bus: Bus,
     last_read: Option<u16>,
     last_write: Option<u16>,
+    dirty_battery: bool,
 }
 
 impl Cpu {
@@ -43,6 +44,7 @@ impl Cpu {
             bus: Bus::new(),
             last_read: None,
             last_write: None,
+            dirty_battery: false,
         };
 
         // The RAM is initialized to these values after boot
@@ -187,7 +189,8 @@ impl Cpu {
     }
 
     pub fn write_ram(&mut self, addr: u16, val: u8) {
-        self.bus.write_ram(addr, val);
+        self.last_write = Some(addr);
+        self.dirty_battery |= self.bus.write_ram(addr, val);
     }
 
     pub fn dec_r16(&mut self, r: Regs16) {
@@ -327,12 +330,12 @@ impl Cpu {
         let low = self.read_ram(self.sp);
         let high = self.read_ram(self.sp + 1);
         let val = merge_bytes(high, low);
-        self.sp += 2;
+        self.sp = self.sp.wrapping_add(2);
         return val;
     }
 
     pub fn push(&mut self, val: u16) {
-        self.sp -= 2;
+        self.sp = self.sp.wrapping_sub(2);
         self.write_ram(self.sp, val.low_byte());
         self.write_ram(self.sp + 1, val.high_byte());
     }
@@ -447,15 +450,13 @@ impl Cpu {
             self.enable_irq_type(Interrupts::Stat, true);
         }
         match ppu_result.lcd_result {
+            LcdResults::RenderLine => {
+                self.bus.render_scanline();
+            },
             LcdResults::RenderFrame => {
-                // render final scanline
-                // self.bus.render_scanline();
                 self.enable_irq_type(Interrupts::Vblank, true);
                 draw_time = true;
             },
-            // LcdResults::RenderLine => {
-            //     self.bus.render_scanline();
-            // },
             _ => {},
         }
 
@@ -526,6 +527,22 @@ impl Cpu {
 
     pub fn get_title(&self) -> &str {
         self.bus.get_title()
+    }
+
+    pub fn clean_battery(&mut self) {
+        self.dirty_battery = false;
+    }
+
+    pub fn is_battery_dirty(&self) -> bool {
+        self.dirty_battery
+    }
+
+    pub fn get_battery_data(&self) -> &[u8] {
+        self.bus.get_battery_data()
+    }
+
+    pub fn set_battery_data(&mut self, data: &[u8]) {
+        self.bus.set_battery_data(data);
     }
 }
 

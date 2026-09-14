@@ -1777,10 +1777,10 @@ fn execute_cb(cpu: &mut Cpu, op: u8) -> u8 {
 
     let cb_reg = get_cb_reg(op);
     match op {
-        0x00..=0x07 => { cpu.rotate_left(cb_reg, true); },
-        0x08..=0x0F => { cpu.rotate_right(cb_reg, true); },
-        0x10..=0x17 => { cpu.rotate_left(cb_reg, false); },
-        0x18..=0x1F => { cpu.rotate_right(cb_reg, false); },
+        0x00..=0x07 => { cpu.rotate_left(cb_reg, false); },
+        0x08..=0x0F => { cpu.rotate_right(cb_reg, false); },
+        0x10..=0x17 => { cpu.rotate_left(cb_reg, true); },
+        0x18..=0x1F => { cpu.rotate_right(cb_reg, true); },
         0x20..=0x27 => { cpu.shift_left(cb_reg); },
         0x28..=0x2F => { cpu.shift_right(cb_reg, true); },
         0x30..=0x37 => { cpu.swap_bits(cb_reg); },
@@ -1807,28 +1807,28 @@ fn execute_cb(cpu: &mut Cpu, op: u8) -> u8 {
 
 // RLCA 000C
 fn rlca_07(cpu: &mut Cpu) -> u8 {
-    cpu.rotate_left(Regs::A, true);
+    cpu.rotate_left(Regs::A, false);
     cpu.set_flag(Flags::Z, false);
     1
 }
 
 // RRCA 000C
 fn rrca_0f(cpu: &mut Cpu) -> u8 {
-    cpu.rotate_right(Regs::A, true);
+    cpu.rotate_right(Regs::A, false);
     cpu.set_flag(Flags::Z, false);
     1
 }
 
 // RLA 000C
 fn rla_17(cpu: &mut Cpu) -> u8 {
-    cpu.rotate_left(Regs::A, false);
+    cpu.rotate_left(Regs::A, true);
     cpu.set_flag(Flags::Z, false);
     1
 }
 
 // RRA 000C
 fn rra_1f(cpu: &mut Cpu) -> u8 {
-    cpu.rotate_right(Regs::A, false);
+    cpu.rotate_right(Regs::A, true);
     cpu.set_flag(Flags::Z, false);
     1
 }
@@ -1891,36 +1891,29 @@ fn halt_76(cpu: &mut Cpu) -> u8 {
 }
 
 // For our unused spaces on the table
-fn invalid(_cpu: &mut Cpu) -> u8 {
-    panic!("Invalid opcode");
+fn invalid(cpu: &mut Cpu) -> u8 {
+    let pc = cpu.get_pc();
+    let op = cpu.read_ram(pc.wrapping_sub(1));
+    panic!("Invalid opcode: 0x{:02X} at PC: 0x{:04X}", op, pc.wrapping_sub(1));
 }
 
 // DAA Z-0C
 fn daa_27(cpu: &mut Cpu) -> u8 {
-    let mut a = cpu.get_r8(Regs::A) as i32;
-
-    if cpu.get_flag(Flags::N) {
-        if cpu.get_flag(Flags::H) {
-            a = (a - 6) & 0xFF;
-        }
-        if cpu.get_flag(Flags::C) {
-            a -= 0x60;
-        }
+    let mut a = cpu.get_r8(Regs::A);
+    let mut adjust = if cpu.get_flag(Flags::C) { 0x60 } else { 0x00 };
+    if cpu.get_flag(Flags::H) { adjust |= 0x06; }
+    
+    if !cpu.get_flag(Flags::N) {
+        if a & 0x0F > 0x09 { adjust |= 0x06; }
+        if a > 0x99 { adjust |= 0x60; }
+        a = a.wrapping_add(adjust);
     } else {
-        if cpu.get_flag(Flags::H) || (a & 0x0F) > 0x09 {
-            a += 0x06;
-        }
-        if cpu.get_flag(Flags::C) || a > 0x9F {
-            a += 0x60;
-        }
+        a = a.wrapping_sub(adjust);
     }
-
-    if (a & 0x100) == 0x100 {
-        cpu.set_flag(Flags::C, true);
-    }
-    a &= 0xFF;
-    cpu.set_r8(Regs::A, a as u8);
-    cpu.set_flag(Flags::Z, a == 0);
+    
+    cpu.set_flag(Flags::C, adjust >= 0x60);
     cpu.set_flag(Flags::H, false);
+    cpu.set_flag(Flags::Z, a == 0);
+    cpu.set_r8(Regs::A, a);
     1
 }
