@@ -7,18 +7,15 @@ pub const TAC: u16 = 0xFF07;
 
 const TAC_ENABLE_BIT: u8 = 2;
 
-// Timer overflow takes 1 M-cycle: TIMA=00 for 1 M-cycle, then TMA loaded + IF set
-const TIMA_OVERFLOW_CYCLES: u8 = 1;
-
 #[derive(PartialEq)]
 enum TimerState {
     Normal,
-    OverflowCycleA,  // TIMA=00, waiting for cycle B
+    OverflowCycleA,  // TIMA=00, waiting for cycle B (1 M-cycle)
     OverflowCycleB,  // Loading TMA, setting IF
 }
 
 pub struct Timer {
-    div_counter: u16,
+    sys_counter: u32,      // System counter (increments every T-cycle = 4.19 MHz)
     tima: u8,
     tma: u8,
     tac: u8,
@@ -30,7 +27,7 @@ pub struct Timer {
 impl Timer {
     pub fn new() -> Self {
         Self {
-            div_counter: 0,
+            sys_counter: 0,
             tima: 0,
             tma: 0,
             tac: 0,
@@ -46,7 +43,7 @@ impl Timer {
 
     pub fn read_timer(&self, addr: u16) -> u8 {
         match addr {
-            DIV => (self.div_counter >> 8) as u8,
+            DIV => (self.sys_counter >> 8) as u8,
             TIMA => self.tima,
             TMA => self.tma,
             TAC => self.tac,
@@ -57,11 +54,11 @@ impl Timer {
     pub fn write_timer(&mut self, addr: u16, val: u8) {
         match addr {
             DIV => {
-                // Writing to DIV resets the divider counter to 0.
+                // Writing to DIV resets the system counter to 0.
                 // If the TIMA clock bit was 1 and becomes 0, this is a falling edge
                 // that should increment TIMA (if timer is enabled).
                 let old_bit = self.tima_status();
-                self.div_counter = 0;
+                self.sys_counter = 0;
                 let new_bit = self.tima_status();
                 let enabled = self.tac.get_bit(TAC_ENABLE_BIT);
                 
@@ -131,27 +128,30 @@ impl Timer {
 
     pub fn tick(&mut self, m_cycles: u8) -> bool {
         let mut interrupt = false;
-        let t_cycles = 4 * m_cycles;
+        let t_cycles = 4 * m_cycles as u32;
 
         for _ in 0..t_cycles {
+            // Handle overflow state machine (advances once per M-cycle = 4 T-cycles)
+            if (self.sys_counter & 3) == 0 {
+                match self.state {
+                    TimerState::OverflowCycleA => {
+                        // Cycle A: TIMA=00, transition to Cycle B
+                        self.state = TimerState::OverflowCycleB;
+                    }
+                    TimerState::OverflowCycleB => {
+                        // Cycle B: Load TMA, set IF
+                        self.tima = self.overflow_pending_tma;
+                        interrupt = true;
+                        self.state = TimerState::Normal;
+                    }
+                    TimerState::Normal => {}
+                }
+            }
+
             let old_bit = self.tima_status();
 
-            self.div_counter = self.div_counter.wrapping_add(1);
-
-            // Handle overflow state machine
-            match self.state {
-                TimerState::OverflowCycleA => {
-                    // Cycle A: TIMA=00, transition to Cycle B
-                    self.state = TimerState::OverflowCycleB;
-                }
-                TimerState::OverflowCycleB => {
-                    // Cycle B: Load TMA, set IF
-                    self.tima = self.overflow_pending_tma;
-                    interrupt = true;
-                    self.state = TimerState::Normal;
-                }
-                TimerState::Normal => {}
-            }
+            // Increment system counter (once per T-cycle)
+            self.sys_counter = self.sys_counter.wrapping_add(1);
 
             let new_bit = self.tima_status();
             let enabled = self.tac.get_bit(TAC_ENABLE_BIT);
@@ -164,17 +164,17 @@ impl Timer {
         interrupt
     }
 
-    fn get_tima_period(&self) -> u16 {
+    fn get_tima_period(&self) -> u32 {
         match self.tac & 0b11 {
-            0b00 => 1 << 9,
-            0b01 => 1 << 3,
-            0b10 => 1 << 5,
-            0b11 => 1 << 7,
+            0b00 => 1 << 9,   // bit 9: 1024 T-cycles period (falling edge every 1024 T-cycles)
+            0b01 => 1 << 3,   // bit 3: 16 T-cycles period
+            0b10 => 1 << 5,   // bit 5: 64 T-cycles period
+            0b11 => 1 << 7,   // bit 7: 256 T-cycles period
             _ => unreachable!(),
         }
     }
 
     fn tima_status(&self) -> bool {
-        (self.div_counter & self.get_tima_period()) != 0
+        (self.sys_counter & self.get_tima_period()) != 0
     }
 }

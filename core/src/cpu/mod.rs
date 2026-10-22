@@ -62,10 +62,9 @@ impl Cpu {
         cpu.write_ram(0xFF23, 0xBF);
         cpu.write_ram(0xFF24, 0x77);
         
-        // Initialize timer - enable timer by writing to TAC with bit 2 set (0x04)
-        // This ensures the timer IRQ fires even if ROM doesn't configure it
-        // We use 0x05 to set period 0b01 (1<<3 = 8) for faster testing
-        cpu.write_ram(0xFF07, 0x05);
+        // Timer (TAC) is initialized to $F8 by boot ROM (disabled, clock select 00)
+        // ROM will configure it as needed
+        cpu.write_ram(0xFF07, 0xF8);
 
         cpu
     }
