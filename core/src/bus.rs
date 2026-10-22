@@ -85,10 +85,24 @@ impl Bus {
         self.wram.set_cgb(is_cgb);
         
         if is_cgb {
-            // Initialize CGB palettes to default values (white)
-            for i in 0..64 {
-                self.bg_palette[i] = 0xFF;
-                self.obj_palette[i] = 0xFF;
+            // Initialize CGB palettes to DMG-equivalent grayscale palette
+            // DMG default BGP=0xE4 maps: 0->Light, 1->Dark, 2->Black, 3->White
+            // CGB palette format: 15-bit RGB555 per color (2 bytes little-endian)
+            // 4 colors per palette * 8 palettes * 2 bytes = 64 bytes
+            let gray_palette = [
+                0xFF, 0x7F,  // Color 0: White (0x7FFF)
+                0x94, 0x52,  // Color 1: Light gray (0x5294)
+                0x08, 0x21,  // Color 2: Dark gray (0x2108)
+                0x00, 0x00,  // Color 3: Black (0x0000)
+            ];
+            for pal in 0..8 {
+                for color in 0..4 {
+                    let idx = pal * 8 + color * 2;
+                    self.bg_palette[idx] = gray_palette[color * 2];
+                    self.bg_palette[idx + 1] = gray_palette[color * 2 + 1];
+                    self.obj_palette[idx] = gray_palette[color * 2];
+                    self.obj_palette[idx + 1] = gray_palette[color * 2 + 1];
+                }
             }
         }
     }
@@ -145,9 +159,13 @@ impl Bus {
                         HDMA3 => (self.hdma_dst >> 8) as u8,
                         HDMA4 => (self.hdma_dst & 0xFF) as u8,
                         HDMA5 => {
-                            let mut val = self.hdma_len;
-                            if self.hdma_mode_gdma { val |= 0x80; }
-                            val
+                            if self.hdma_active || self.hdma_mode_gdma {
+                                let mut val = self.hdma_len;
+                                if self.hdma_mode_gdma { val |= 0x80; }
+                                val
+                            } else {
+                                0xFF // HDMA not active
+                            }
                         },
                         _ => 0xFF,
                     }

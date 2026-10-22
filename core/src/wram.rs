@@ -16,7 +16,7 @@ impl WRAM {
     pub fn new() -> Self {
         Self {
             wram: [0; CGB_WRAM_SIZE],
-            svbk: 1,
+            svbk: 0, // CGB boot ROM initializes SVBK to 0 (selects bank 1)
             is_cgb: false,
         }
     }
