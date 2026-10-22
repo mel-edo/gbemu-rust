@@ -2,7 +2,7 @@ use crate::utils::BitOps;
 
 #[derive(Copy, Clone)]
 pub struct Tile {
-    pixels: [[u8; 8]; 8]
+    pixels: [[u8; 8]; 8],
 }
 
 impl Tile {
@@ -21,7 +21,11 @@ impl Tile {
         let mut ret = 0;
         for i in 0..8 {
             ret <<= 1;
-            ret |= if self.pixels[row][7 - i].get_bit(bit) { 1 } else { 0 };
+            ret |= if self.pixels[row][7 - i].get_bit(bit) {
+                1
+            } else {
+                0
+            };
         }
         ret
     }

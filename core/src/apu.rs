@@ -4,10 +4,10 @@ pub const APU_START: u16 = 0xFF10;
 pub const APU_STOP: u16 = 0xFF3F;
 
 const DUTY_TABLE: [[u8; 8]; 4] = [
-    [0,0,0,0,0,0,0,1], // 12.5%
-    [1,0,0,0,0,0,0,1], // 25%
-    [1,0,0,0,0,1,1,1], // 50%
-    [0,1,1,1,1,1,1,0], // 75%
+    [0, 0, 0, 0, 0, 0, 0, 1], // 12.5%
+    [1, 0, 0, 0, 0, 0, 0, 1], // 25%
+    [1, 0, 0, 0, 0, 1, 1, 1], // 50%
+    [0, 1, 1, 1, 1, 1, 1, 0], // 75%
 ];
 
 pub struct PulseChannel {
@@ -15,19 +15,19 @@ pub struct PulseChannel {
     pub channel_dac: bool,
     duty: u8,
     duty_step: u8,
-    
+
     length_timer: u8,
     length_enable: bool,
-    
+
     timer: u16,
     freq: u16,
-    
+
     vol: u8,
     env_vol: u8,
     env_dir: i8,
     env_period: u8,
     env_timer: u8,
-    
+
     // Sweep (Channel 1 only)
     sweep_timer: u8,
     sweep_period: u8,
@@ -61,7 +61,7 @@ impl PulseChannel {
             shadow_freq: 0,
         }
     }
-    
+
     pub fn step_timer(&mut self) {
         if self.timer > 0 {
             self.timer -= 1;
@@ -109,16 +109,20 @@ impl PulseChannel {
         if self.sweep_timer > 0 {
             self.sweep_timer -= 1;
         }
-        
+
         if self.sweep_timer == 0 {
-            self.sweep_timer = if self.sweep_period == 0 { 8 } else { self.sweep_period };
-            
+            self.sweep_timer = if self.sweep_period == 0 {
+                8
+            } else {
+                self.sweep_period
+            };
+
             if self.sweep_enabled && self.sweep_period > 0 {
                 let new_freq = self.calculate_sweep_freq();
                 if new_freq <= 2047 && self.sweep_shift > 0 {
                     self.shadow_freq = new_freq;
                     self.freq = new_freq;
-                    
+
                     // Run overflow check again
                     if self.calculate_sweep_freq() > 2047 {
                         self.enabled = false;
@@ -138,11 +142,15 @@ impl PulseChannel {
         self.timer = (2048 - self.freq) * 4;
         self.env_timer = self.env_period;
         self.env_vol = self.vol;
-        
+
         self.shadow_freq = self.freq;
-        self.sweep_timer = if self.sweep_period == 0 { 8 } else { self.sweep_period };
+        self.sweep_timer = if self.sweep_period == 0 {
+            8
+        } else {
+            self.sweep_period
+        };
         self.sweep_enabled = self.sweep_period > 0 || self.sweep_shift > 0;
-        
+
         if self.sweep_shift > 0 && self.calculate_sweep_freq() > 2047 {
             self.enabled = false;
         }
@@ -164,13 +172,13 @@ impl PulseChannel {
 pub struct WaveChannel {
     pub enabled: bool,
     pub channel_dac: bool,
-    
+
     length_timer: u16,
     length_enable: bool,
-    
+
     timer: u16,
     freq: u16,
-    
+
     vol_code: u8,
     position: u8,
     sample_buffer: u8,
@@ -198,7 +206,7 @@ impl WaveChannel {
         if self.timer == 0 {
             self.timer = (2048 - self.freq) * 2;
             self.position = (self.position + 1) & 31;
-            
+
             // Read sample from Wave RAM (ram offset 0x20)
             let byte_idx = self.position / 2;
             let byte = ram[0x20 + byte_idx as usize];
@@ -249,19 +257,19 @@ impl WaveChannel {
 pub struct NoiseChannel {
     pub enabled: bool,
     pub channel_dac: bool,
-    
+
     length_timer: u8,
     length_enable: bool,
-    
+
     vol: u8,
     env_vol: u8,
     env_dir: i8,
     env_period: u8,
     env_timer: u8,
-    
+
     timer: u32,
     lfsr: u16,
-    
+
     shift_clock: u8,
     step_width: bool,
     div_ratio: u8,
@@ -292,9 +300,13 @@ impl NoiseChannel {
             self.timer -= 1;
         }
         if self.timer == 0 {
-            let divisor = if self.div_ratio == 0 { 8 } else { (self.div_ratio as u32) * 16 };
+            let divisor = if self.div_ratio == 0 {
+                8
+            } else {
+                (self.div_ratio as u32) * 16
+            };
             self.timer = divisor << self.shift_clock;
-            
+
             let xor_bit = (self.lfsr & 1) ^ ((self.lfsr >> 1) & 1);
             self.lfsr = (self.lfsr >> 1) | (xor_bit << 14);
             if self.step_width {
@@ -332,7 +344,11 @@ impl NoiseChannel {
         if self.length_timer == 0 {
             self.length_timer = 64;
         }
-        let divisor = if self.div_ratio == 0 { 8 } else { (self.div_ratio as u32) * 16 };
+        let divisor = if self.div_ratio == 0 {
+            8
+        } else {
+            (self.div_ratio as u32) * 16
+        };
         self.timer = divisor << self.shift_clock;
         self.lfsr = 0x7FFF;
         self.env_timer = self.env_period;
@@ -353,25 +369,25 @@ impl NoiseChannel {
 
 pub struct Apu {
     ram: [u8; (APU_STOP - APU_START + 1) as usize],
-    
+
     // Channels
     pub ch1: PulseChannel,
     pub ch2: PulseChannel,
     pub ch3: WaveChannel,
     pub ch4: NoiseChannel,
-    
+
     // Master controls
     pub master_en: bool,
     pub left_vol: u8,
     pub right_vol: u8,
     pub pan: u8, // NR51
-    
+
     // Timing
     pub audio_buffer: Vec<f32>,
     cycles: u32,
     sample_rate: u32,
     cpu_freq: u32,
-    
+
     // Frame Sequencer
     fs_timer: u32,
     fs_step: u8,
@@ -413,17 +429,27 @@ impl Apu {
                 0xFF30..=0xFF3F => 0x00, // Wave RAM
                 _ => 0xFF,
             };
-            
+
             if addr == 0xFF26 {
                 let mut res = 0x70;
-                if self.master_en { res |= 0x80; }
-                if self.ch1.enabled { res |= 0x01; }
-                if self.ch2.enabled { res |= 0x02; }
-                if self.ch3.enabled { res |= 0x04; }
-                if self.ch4.enabled { res |= 0x08; }
+                if self.master_en {
+                    res |= 0x80;
+                }
+                if self.ch1.enabled {
+                    res |= 0x01;
+                }
+                if self.ch2.enabled {
+                    res |= 0x02;
+                }
+                if self.ch3.enabled {
+                    res |= 0x04;
+                }
+                if self.ch4.enabled {
+                    res |= 0x08;
+                }
                 return res | (self.ram[(addr - APU_START) as usize] & !mask);
             }
-            
+
             self.ram[(addr - APU_START) as usize] | mask
         } else {
             0xFF
@@ -451,115 +477,123 @@ impl Apu {
         if !self.master_en {
             return;
         }
-        
+
         if addr >= APU_START && addr <= APU_STOP {
             self.ram[(addr - APU_START) as usize] = val;
-            
+
             match addr {
                 // Channel 1
                 0xFF10 => {
                     self.ch1.sweep_period = (val >> 4) & 7;
                     self.ch1.sweep_negate = val.get_bit(3);
                     self.ch1.sweep_shift = val & 7;
-                },
+                }
                 0xFF11 => {
                     self.ch1.duty = val >> 6;
                     self.ch1.length_timer = 64 - (val & 0x3F);
-                },
+                }
                 0xFF12 => {
                     self.ch1.vol = val >> 4;
                     self.ch1.env_dir = if val.get_bit(3) { 1 } else { -1 };
                     self.ch1.env_period = val & 7;
                     self.ch1.channel_dac = val & 0xF8 != 0;
-                    if !self.ch1.channel_dac { self.ch1.enabled = false; }
-                },
+                    if !self.ch1.channel_dac {
+                        self.ch1.enabled = false;
+                    }
+                }
                 0xFF13 => {
                     self.ch1.freq = (self.ch1.freq & 0x700) | val as u16;
-                },
+                }
                 0xFF14 => {
                     self.ch1.freq = (self.ch1.freq & 0xFF) | (((val & 7) as u16) << 8);
                     self.ch1.length_enable = val.get_bit(6);
                     if val.get_bit(7) {
                         self.ch1.trigger();
                     }
-                },
-                
+                }
+
                 // Channel 2
                 0xFF16 => {
                     self.ch2.duty = val >> 6;
                     self.ch2.length_timer = 64 - (val & 0x3F);
-                },
+                }
                 0xFF17 => {
                     self.ch2.vol = val >> 4;
                     self.ch2.env_dir = if val.get_bit(3) { 1 } else { -1 };
                     self.ch2.env_period = val & 7;
                     self.ch2.channel_dac = val & 0xF8 != 0;
-                    if !self.ch2.channel_dac { self.ch2.enabled = false; }
-                },
+                    if !self.ch2.channel_dac {
+                        self.ch2.enabled = false;
+                    }
+                }
                 0xFF18 => {
                     self.ch2.freq = (self.ch2.freq & 0x700) | val as u16;
-                },
+                }
                 0xFF19 => {
                     self.ch2.freq = (self.ch2.freq & 0xFF) | (((val & 7) as u16) << 8);
                     self.ch2.length_enable = val.get_bit(6);
                     if val.get_bit(7) {
                         self.ch2.trigger();
                     }
-                },
-                
+                }
+
                 // Channel 3
                 0xFF1A => {
                     self.ch3.channel_dac = val.get_bit(7);
-                    if !self.ch3.channel_dac { self.ch3.enabled = false; }
-                },
+                    if !self.ch3.channel_dac {
+                        self.ch3.enabled = false;
+                    }
+                }
                 0xFF1B => {
                     self.ch3.length_timer = 256 - (val as u16);
-                },
+                }
                 0xFF1C => {
                     self.ch3.vol_code = (val >> 5) & 3;
-                },
+                }
                 0xFF1D => {
                     self.ch3.freq = (self.ch3.freq & 0x700) | val as u16;
-                },
+                }
                 0xFF1E => {
                     self.ch3.freq = (self.ch3.freq & 0xFF) | (((val & 7) as u16) << 8);
                     self.ch3.length_enable = val.get_bit(6);
                     if val.get_bit(7) {
                         self.ch3.trigger();
                     }
-                },
-                
+                }
+
                 // Channel 4
                 0xFF20 => {
                     self.ch4.length_timer = 64 - (val & 0x3F);
-                },
+                }
                 0xFF21 => {
                     self.ch4.vol = val >> 4;
                     self.ch4.env_dir = if val.get_bit(3) { 1 } else { -1 };
                     self.ch4.env_period = val & 7;
                     self.ch4.channel_dac = val & 0xF8 != 0;
-                    if !self.ch4.channel_dac { self.ch4.enabled = false; }
-                },
+                    if !self.ch4.channel_dac {
+                        self.ch4.enabled = false;
+                    }
+                }
                 0xFF22 => {
                     self.ch4.shift_clock = val >> 4;
                     self.ch4.step_width = val.get_bit(3);
                     self.ch4.div_ratio = val & 7;
-                },
+                }
                 0xFF23 => {
                     self.ch4.length_enable = val.get_bit(6);
                     if val.get_bit(7) {
                         self.ch4.trigger();
                     }
-                },
-                
+                }
+
                 // Master controls
                 0xFF24 => {
                     self.left_vol = (val >> 4) & 7;
                     self.right_vol = val & 7;
-                },
+                }
                 0xFF25 => {
                     self.pan = val;
-                },
+                }
                 _ => {}
             }
         }
@@ -569,14 +603,14 @@ impl Apu {
         if !self.master_en {
             return;
         }
-        
+
         let cycles_u32 = (cycles as u32) * 4;
-        
+
         // Frame sequencer (8192 cycles = 512Hz)
         self.fs_timer += cycles_u32;
         while self.fs_timer >= 8192 {
             self.fs_timer -= 8192;
-            
+
             // Step length (256Hz: steps 0, 2, 4, 6)
             if self.fs_step % 2 == 0 {
                 self.ch1.step_length();
@@ -584,22 +618,22 @@ impl Apu {
                 self.ch3.step_length();
                 self.ch4.step_length();
             }
-            
+
             // Step sweep (128Hz: steps 2, 6)
             if self.fs_step == 2 || self.fs_step == 6 {
                 self.ch1.step_sweep();
             }
-            
+
             // Step volume envelope (64Hz: step 7)
             if self.fs_step == 7 {
                 self.ch1.step_env();
                 self.ch2.step_env();
                 self.ch4.step_env();
             }
-            
+
             self.fs_step = (self.fs_step + 1) & 7;
         }
-        
+
         // Channel timers
         for _ in 0..cycles_u32 {
             self.ch1.step_timer();
@@ -609,40 +643,56 @@ impl Apu {
         }
 
         self.cycles += cycles_u32;
-        
+
         let cycles_per_sample = self.cpu_freq / self.sample_rate;
 
         // Generate audio samples based on cycles elapsed
         while self.cycles >= cycles_per_sample {
             self.cycles -= cycles_per_sample;
-            
+
             // Mix channels
             let amp1 = self.ch1.get_amplitude() as f32 / 15.0; // 0.0 to 1.0
             let amp2 = self.ch2.get_amplitude() as f32 / 15.0; // 0.0 to 1.0
             let amp3 = self.ch3.get_amplitude() as f32 / 15.0; // 0.0 to 1.0
             let amp4 = self.ch4.get_amplitude() as f32 / 15.0; // 0.0 to 1.0
-            
+
             let mut left = 0.0;
             let mut right = 0.0;
-            
+
             // Panning NR51
-            if self.pan.get_bit(4) { left += amp1; }
-            if self.pan.get_bit(0) { right += amp1; }
-            if self.pan.get_bit(5) { left += amp2; }
-            if self.pan.get_bit(1) { right += amp2; }
-            if self.pan.get_bit(6) { left += amp3; }
-            if self.pan.get_bit(2) { right += amp3; }
-            if self.pan.get_bit(7) { left += amp4; }
-            if self.pan.get_bit(3) { right += amp4; }
-            
+            if self.pan.get_bit(4) {
+                left += amp1;
+            }
+            if self.pan.get_bit(0) {
+                right += amp1;
+            }
+            if self.pan.get_bit(5) {
+                left += amp2;
+            }
+            if self.pan.get_bit(1) {
+                right += amp2;
+            }
+            if self.pan.get_bit(6) {
+                left += amp3;
+            }
+            if self.pan.get_bit(2) {
+                right += amp3;
+            }
+            if self.pan.get_bit(7) {
+                left += amp4;
+            }
+            if self.pan.get_bit(3) {
+                right += amp4;
+            }
+
             // Mix down (divide by total possible channels to prevent clipping, though realistically 4 channels)
             left /= 4.0;
             right /= 4.0;
-            
+
             // Apply master volume NR50 (0-7)
             let vol_l = (self.left_vol as f32 + 1.0) / 8.0;
             let vol_r = (self.right_vol as f32 + 1.0) / 8.0;
-            
+
             self.audio_buffer.push(left * vol_l);
             self.audio_buffer.push(right * vol_r);
         }

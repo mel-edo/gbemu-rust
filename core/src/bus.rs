@@ -20,6 +20,9 @@ pub struct Bus {
     hram: [u8; HRAM_SIZE],
     pub apu: Apu,
     pub serial: Serial,
+    dma_active: bool,
+    dma_source: u16,
+    dma_index: u16,
 }
 
 impl Bus {
@@ -32,6 +35,9 @@ impl Bus {
             hram: [0; HRAM_SIZE],
             apu: Apu::new(),
             serial: Serial::new(),
+            dma_active: false,
+            dma_source: 0,
+            dma_index: 0,
         }
     }
 
@@ -47,6 +53,9 @@ impl Bus {
     }
 
     pub fn read_ram(&self, addr: u16) -> u8 {
+        if self.dma_active && !(HRAM_START..=0xFFFE).contains(&addr) {
+            return 0xFF;
+        }
         match addr {
             ROM_START..=ROM_STOP => {
                 self.rom.read_cart(addr)
@@ -95,7 +104,14 @@ impl Bus {
         self.io.set_button(button, pressed);
     }
 
+    pub fn take_serial_output(&mut self) -> Vec<u8> {
+        self.serial.take_output()
+    }
+
     pub fn write_ram(&mut self, addr: u16, val: u8) -> bool {
+        if self.dma_active && !(HRAM_START..=0xFFFE).contains(&addr) {
+            return false;
+        }
         let mut battery_write = false;
         match addr {
             ROM_START..=ROM_STOP => {
@@ -116,7 +132,7 @@ impl Bus {
             },
             LCD_REG_START..=LCD_REG_STOP => {
                 if addr == OAM_DMA {
-                    self.dma_transfer(val);
+                    self.start_dma(val);
                 }
                 self.ppu.write_lcd_reg(addr, val);
             },
@@ -164,11 +180,39 @@ impl Bus {
         self.ppu.render_scanline();
     }
 
-    fn dma_transfer(&mut self, val: u8) {
-        let src = (val as u16) << 8;
-        for i in 0..0xA0 {
-            let val = self.read_ram(src + i);
-            self.write_ram(OAM_START + i, val);
+    fn start_dma(&mut self, val: u8) {
+        self.dma_active = true;
+        self.dma_source = (val as u16) << 8;
+        self.dma_index = 0;
+    }
+
+    pub fn update_dma(&mut self, cycles: u8) {
+        for _ in 0..cycles {
+            if !self.dma_active {
+                return;
+            }
+
+            let src = self.dma_source + self.dma_index;
+            let value = self.read_dma_source(src);
+
+            self.ppu.write_oam(OAM_START + self.dma_index, value);
+
+            self.dma_index += 1;
+
+            if self.dma_index >= 0xA0 {
+                self.dma_active = false;
+            }
+        }
+    }
+
+    fn read_dma_source(&self, addr: u16) -> u8 {
+        match addr {
+            ROM_START..=ROM_STOP => self.rom.read_cart(addr),
+            VRAM_START..=VRAM_STOP => self.ppu.read_vram(addr),
+            EXT_RAM_START..=EXT_RAM_STOP => self.rom.read_ram(addr),
+            WRAM_START..=ECHO_STOP => self.wram.read_u8(addr),
+            OAM_START..=OAM_STOP => self.ppu.read_oam(addr),
+            _ => self.read_ram(addr),
         }
     }
 

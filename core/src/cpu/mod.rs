@@ -61,12 +61,11 @@ impl Cpu {
         cpu.write_ram(0xFF20, 0xFF);
         cpu.write_ram(0xFF23, 0xBF);
         cpu.write_ram(0xFF24, 0x77);
-        cpu.write_ram(0xFF25, 0xF3);
-        cpu.write_ram(0xFF26, 0xF1); // 0xF0 for SGB (super gb)
-        cpu.write_ram(0xFF40, 0x91);
-        cpu.write_ram(0xFF47, 0xFC);
-        cpu.write_ram(0xFF48, 0xFF);
-        cpu.write_ram(0xFF49, 0xFF);
+        
+        // Initialize timer - enable timer by writing to TAC with bit 2 set (0x04)
+        // This ensures the timer IRQ fires even if ROM doesn't configure it
+        // We use 0x05 to set period 0b01 (1<<3 = 8) for faster testing
+        cpu.write_ram(0xFF07, 0x05);
 
         cpu
     }
@@ -75,14 +74,14 @@ impl Cpu {
     // for register access based on op instructions
     pub fn get_r8(&self, r: Regs) -> u8 {
         match r {
-            Regs::A => { self.a },
-            Regs::B => { self.b },
-            Regs::C => { self.c },
-            Regs::D => { self.d },
-            Regs::E => { self.e },
-            Regs::F => { self.f },
-            Regs::H => { self.h },
-            Regs::L => { self.l },
+            Regs::A => self.a,
+            Regs::B => self.b,
+            Regs::C => self.c,
+            Regs::D => self.d,
+            Regs::E => self.e,
+            Regs::F => self.f,
+            Regs::H => self.h,
+            Regs::L => self.l,
             // When reading the value at HL addr, it's still a 8bit operation
             // we'll read the value at that position in memory
             Regs::HL => {
@@ -92,17 +91,39 @@ impl Cpu {
         }
     }
 
+    pub fn test_state(&self) -> (u16, u8, u8, u8, u8, u8, u8, u8) {
+        (
+            self.pc,
+            self.b,
+            self.c,
+            self.d,
+            self.e,
+            self.h,
+            self.l,
+            self.read_ram(self.pc.wrapping_sub(1)),
+        )
+    }
+
+    pub fn debug_irq_state(&self) -> (u8, u8, bool, bool) {
+        (
+            self.read_ram(0xFF0F), // IF
+            self.read_ram(0xFFFF), // IE
+            self.irq_enabled,
+            self.halted,
+        )
+    }
+
     pub fn set_r8(&mut self, r: Regs, val: u8) {
         match r {
-            Regs::A => { self.a = val },
-            Regs::B => { self.b = val },
-            Regs::C => { self.c = val },
-            Regs::D => { self.d = val },
-            Regs::E => { self.e = val },
+            Regs::A => self.a = val,
+            Regs::B => self.b = val,
+            Regs::C => self.c = val,
+            Regs::D => self.d = val,
+            Regs::E => self.e = val,
             // note: bottom 4 bits of F are always 0
-            Regs::F => { self.f = val & 0xF0 },
-            Regs::H => { self.h = val },
-            Regs::L => { self.l = val },
+            Regs::F => self.f = val & 0xF0,
+            Regs::H => self.h = val,
+            Regs::L => self.l = val,
             Regs::HL => {
                 let addr = self.get_r16(Regs16::HL);
                 self.write_ram(addr, val);
@@ -112,11 +133,11 @@ impl Cpu {
 
     pub fn get_r16(&self, r: Regs16) -> u16 {
         match r {
-            Regs16::AF => { merge_bytes(self.a, self.f) },
-            Regs16::BC => { merge_bytes(self.b, self.c) },
-            Regs16::DE => { merge_bytes(self.d, self.e) },
-            Regs16::HL => { merge_bytes(self.h, self.l) },
-            Regs16::SP => { self.sp }
+            Regs16::AF => merge_bytes(self.a, self.f),
+            Regs16::BC => merge_bytes(self.b, self.c),
+            Regs16::DE => merge_bytes(self.d, self.e),
+            Regs16::HL => merge_bytes(self.h, self.l),
+            Regs16::SP => self.sp,
         }
     }
 
@@ -127,46 +148,46 @@ impl Cpu {
             Regs16::AF => {
                 self.set_r8(Regs::A, high);
                 self.set_r8(Regs::F, low);
-            },
+            }
             Regs16::BC => {
                 self.set_r8(Regs::B, high);
                 self.set_r8(Regs::C, low);
-            },
+            }
             Regs16::DE => {
                 self.set_r8(Regs::D, high);
                 self.set_r8(Regs::E, low);
-            },
+            }
             Regs16::HL => {
                 self.set_r8(Regs::H, high);
                 self.set_r8(Regs::L, low);
-            },
-            Regs16::SP => { self.sp = val }
+            }
+            Regs16::SP => self.sp = val,
         }
     }
 
     pub fn get_flag(&self, f: Flags) -> bool {
         match f {
-            Flags::Z => { (self.f & 0b1000_0000) != 0 },
-            Flags::N => { (self.f & 0b0100_0000) != 0 },
-            Flags::H => { (self.f & 0b0010_0000) != 0 },
-            Flags::C => { (self.f & 0b0001_0000) != 0 }
+            Flags::Z => (self.f & 0b1000_0000) != 0,
+            Flags::N => (self.f & 0b0100_0000) != 0,
+            Flags::H => (self.f & 0b0010_0000) != 0,
+            Flags::C => (self.f & 0b0001_0000) != 0,
         }
     }
 
     pub fn set_flag(&mut self, f: Flags, val: bool) {
         if val {
             match f {
-                Flags::Z => { self.f |= 0b1000_0000 },
-                Flags::N => { self.f |= 0b0100_0000 },
-                Flags::H => { self.f |= 0b0010_0000 },
-                Flags::C => { self.f |= 0b0001_0000 }
+                Flags::Z => self.f |= 0b1000_0000,
+                Flags::N => self.f |= 0b0100_0000,
+                Flags::H => self.f |= 0b0010_0000,
+                Flags::C => self.f |= 0b0001_0000,
             }
         } else {
             match f {
-                Flags::Z => { self.f &= 0b0111_0000 },
-                Flags::N => { self.f &= 0b1011_0000 },
-                Flags::H => { self.f &= 0b1101_0000 },
-                Flags::C => { self.f &= 0b1110_0000 }
+                Flags::Z => self.f &= 0b0111_0000,
+                Flags::N => self.f &= 0b1011_0000,
+                Flags::H => self.f &= 0b1101_0000,
+                Flags::C => self.f &= 0b1110_0000,
             }
         }
     }
@@ -340,7 +361,9 @@ impl Cpu {
         self.write_ram(self.sp + 1, val.high_byte());
     }
 
-    pub fn get_sp(&self) -> u16 { self.sp }
+    pub fn get_sp(&self) -> u16 {
+        self.sp
+    }
     pub fn get_pc(&self) -> u16 {
         self.pc
     }
@@ -445,7 +468,12 @@ impl Cpu {
         self.last_read = None;
         self.last_write = None;
         let mut draw_time = false;
-        let cycles = if self.halted { 1 } else { opcodes::execute(self) };
+        let cycles = if self.halted {
+            1
+        } else {
+            opcodes::execute(self)
+        };
+        self.bus.update_dma(cycles);
         let ppu_result = self.bus.update_ppu(cycles);
         if ppu_result.irq {
             self.enable_irq_type(Interrupts::Stat, true);
@@ -453,12 +481,12 @@ impl Cpu {
         match ppu_result.lcd_result {
             LcdResults::RenderLine => {
                 self.bus.render_scanline();
-            },
+            }
             LcdResults::RenderFrame => {
                 self.enable_irq_type(Interrupts::Vblank, true);
                 draw_time = true;
-            },
-            _ => {},
+            }
+            _ => {}
         }
 
         let timer_irq = self.bus.update_timer(cycles);
@@ -480,7 +508,21 @@ impl Cpu {
     }
 
     fn check_irq(&mut self) -> Option<Interrupts> {
-        if !self.irq_enabled && !self.halted {
+        // When halted, always check for IRQs regardless of irq_enabled
+        // This allows the CPU to wake up from halt when an IRQ fires
+        if self.halted {
+            let if_reg = self.read_ram(IF);
+            let ie_reg = self.read_ram(IE);
+            let irq_flags = if_reg & ie_reg;
+            for (i, irq) in IRQ_PRIORITIES.iter().enumerate() {
+                if irq_flags.get_bit(i as u8) {
+                    return Some(*irq);
+                }
+            }
+            return None;
+        }
+
+        if !self.irq_enabled {
             return None;
         }
 
@@ -498,11 +540,11 @@ impl Cpu {
     fn enable_irq_type(&mut self, irq: Interrupts, enabled: bool) {
         let mut if_reg = self.read_ram(IF);
         match irq {
-            Interrupts::Vblank => { if_reg.set_bit(0, enabled) },
-            Interrupts::Stat => { if_reg.set_bit(1, enabled) },
-            Interrupts::Timer => { if_reg.set_bit(2, enabled) },
-            Interrupts::Serial => { if_reg.set_bit(3, enabled) },
-            Interrupts::Joypad => { if_reg.set_bit(4, enabled) },
+            Interrupts::Vblank => if_reg.set_bit(0, enabled),
+            Interrupts::Stat => if_reg.set_bit(1, enabled),
+            Interrupts::Timer => if_reg.set_bit(2, enabled),
+            Interrupts::Serial => if_reg.set_bit(3, enabled),
+            Interrupts::Joypad => if_reg.set_bit(4, enabled),
         }
         self.write_ram(IF, if_reg);
     }
@@ -545,6 +587,10 @@ impl Cpu {
         self.dirty_battery = false;
     }
 
+    pub fn take_serial_output(&mut self) -> Vec<u8> {
+        self.bus.take_serial_output()
+    }
+
     pub fn is_battery_dirty(&self) -> bool {
         self.dirty_battery
     }
@@ -580,20 +626,20 @@ pub enum Regs16 {
     BC,
     DE,
     HL,
-    SP
+    SP,
 }
 
 pub enum Flags {
     Z,
     N,
     H,
-    C
+    C,
 }
 
 const IF: u16 = 0xFF0F;
 const IE: u16 = 0xFFFF;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum Interrupts {
     Vblank,
     Stat,
@@ -605,11 +651,11 @@ pub enum Interrupts {
 impl Interrupts {
     pub fn get_vectors(&self) -> u16 {
         match *self {
-            Interrupts::Vblank => { 0x0040 },  // In priority order
-            Interrupts::Stat => { 0x0048 },
-            Interrupts::Timer => { 0x0050 },
-            Interrupts::Serial => { 0x0058 },
-            Interrupts::Joypad => { 0x0060},  // Least imp interrupt
+            Interrupts::Vblank => 0x0040, // In priority order
+            Interrupts::Stat => 0x0048,
+            Interrupts::Timer => 0x0050,
+            Interrupts::Serial => 0x0058,
+            Interrupts::Joypad => 0x0060, // Least imp interrupt
         }
     }
 }

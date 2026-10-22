@@ -10,6 +10,7 @@ pub struct Serial {
     bits_shifted: u8,
     timer: u32,
     cpu_freq: u32,
+    output: Vec<u8>,
 }
 
 impl Serial {
@@ -21,6 +22,7 @@ impl Serial {
             bits_shifted: 0,
             timer: 0,
             cpu_freq: 4194304,
+            output: Vec::new(),
         }
     }
 
@@ -46,11 +48,15 @@ impl Serial {
                 
                 // Logging for test ROMs like blargg's which output via serial
                 if val == 0x81 {
-                    print!("{}", self.sb as char);
+                    self.output.push(self.sb);
                 }
             },
             _ => {}
         }
+    }
+
+    pub fn take_output(&mut self) -> Vec<u8> {
+        std::mem::take(&mut self.output)
     }
 
     pub fn tick(&mut self, cycles: u8) -> bool {

@@ -32,15 +32,9 @@ impl Sprite {
     pub fn read_u8(&self, addr: u16) -> u8 {
         let offset = addr % 4;
         match offset {
-            0 => {
-                self.coords.y
-            },
-            1 => {
-                self.coords.x
-            },
-            2 => {
-                self.tile_num
-            },
+            0 => self.coords.y,
+            1 => self.coords.x,
+            2 => self.tile_num,
             3 => {
                 let mut ret = 0;
                 ret.set_bit(BG_PRIORITY_BIT, self.bg_priority);
@@ -48,8 +42,10 @@ impl Sprite {
                 ret.set_bit(X_FLIP_BIT, self.x_flip);
                 ret.set_bit(PALETTE_BIT, self.palette1);
                 ret
-            },
-            _ => { unreachable!() }
+            }
+            _ => {
+                unreachable!()
+            }
         }
     }
 
@@ -58,20 +54,22 @@ impl Sprite {
         match offset {
             0 => {
                 self.coords.y = val;
-            },
+            }
             1 => {
                 self.coords.x = val;
-            },
+            }
             2 => {
                 self.tile_num = val;
-            },
+            }
             3 => {
                 self.bg_priority = val.get_bit(BG_PRIORITY_BIT);
                 self.y_flip = val.get_bit(Y_FLIP_BIT);
                 self.x_flip = val.get_bit(X_FLIP_BIT);
                 self.palette1 = val.get_bit(PALETTE_BIT);
-            },
-            _ => { unreachable!(); }
+            }
+            _ => {
+                unreachable!();
+            }
         }
     }
 
@@ -80,7 +78,10 @@ impl Sprite {
     }
 
     pub fn get_coords(&self) -> (isize, isize) {
-        (self.coords.x as isize - X_OFFSET, self.coords.y as isize - Y_OFFSET)
+        (
+            self.coords.x as isize - X_OFFSET,
+            self.coords.y as isize - Y_OFFSET,
+        )
     }
 
     pub fn get_tile_num(&self) -> u8 {

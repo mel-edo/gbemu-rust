@@ -1,6 +1,6 @@
 ## Gameboy emulator using Rust
 
-> 🎮 **Play it in your browser:** The WebAssembly build of this emulator is hosted on my personal site! **[Try the emulator here](https://mel-edo.github.io/emulator.html)**.
+> **Play it in your browser:** The WebAssembly build of this emulator is hosted on my **[personal site!](https://mel-edo.github.io/moonweft/emulator.html)**
 
 ### Work in progress
 
@@ -24,11 +24,6 @@ The emulator is split into three main components:
 #### Desktop (SDL2)
 - Rust
 - SDL2 development libraries
-
-On Arch:
-```
-sudo pacman -S sdl2
-```
 
 #### WebAssembly (Browser)
 - `wasm-pack` (install via `cargo install wasm-pack`)

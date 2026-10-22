@@ -3,22 +3,38 @@ use crate::utils::*;
 
 const OPCODES: [fn(&mut Cpu) -> u8; 256] = [
     // 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F
-    nop_00, ld_01, ld_02, inc_03, inc_04, dec_05, ld_06, rlca_07, ld_08, add_09, ld_0a, dec_0b, inc_0c, dec_0d, ld_0e, rrca_0f,  // 0x00
-    stop_10, ld_11, ld_12, inc_13, inc_14, dec_15, ld_16, rla_17, jr_18, add_19, ld_1a, dec_1b, inc_1c, dec_1d, ld_1e, rra_1f,  // 0x10
-    jr_20, ld_21, ld_22, inc_23, inc_24, dec_25, ld_26, daa_27, jr_28, add_29, ld_2a, dec_2b, inc_2c, dec_2d, ld_2e, cpl_2f,  // 0x20
-    jr_30, ld_31, ld_32, inc_33, inc_34, dec_35, ld_36, scf_37, jr_38, add_39, ld_3a, dec_3b, inc_3c, dec_3d, ld_3e, ccf_3f,  // 0x30
-    ld_40, ld_41, ld_42, ld_43, ld_44, ld_45, ld_46, ld_47, ld_48, ld_49, ld_4a, ld_4b, ld_4c, ld_4d, ld_4e, ld_4f,  // 0x40
-    ld_50, ld_51, ld_52, ld_53, ld_54, ld_55, ld_56, ld_57, ld_58, ld_59, ld_5a, ld_5b, ld_5c, ld_5d, ld_5e, ld_5f,  // 0x50
-    ld_60, ld_61, ld_62, ld_63, ld_64, ld_65, ld_66, ld_67, ld_68, ld_69, ld_6a, ld_6b, ld_6c, ld_6d, ld_6e, ld_6f,  // 0x60
-    ld_70, ld_71, ld_72, ld_73, ld_74, ld_75, halt_76, ld_77, ld_78, ld_79, ld_7a, ld_7b, ld_7c, ld_7d, ld_7e, ld_7f,  // 0x70
-    add_80, add_81, add_82, add_83, add_84, add_85, add_86, add_87, adc_88, adc_89, adc_8a, adc_8b, adc_8c, adc_8d, adc_8e, adc_8f,  // 0x80
-    sub_90, sub_91, sub_92, sub_93, sub_94, sub_95, sub_96, sub_97, sbc_98, sbc_99, sbc_9a, sbc_9b, sbc_9c, sbc_9d, sbc_9e, sbc_9f,  // 0x90
-    and_a0, and_a1, and_a2, and_a3, and_a4, and_a5, and_a6, and_a7, xor_a8, xor_a9, xor_aa, xor_ab, xor_ac, xor_ad, xor_ae, xor_af,  // 0xA0
-    or_b0, or_b1, or_b2, or_b3, or_b4, or_b5, or_b6, or_b7, cp_b8, cp_b9, cp_ba, cp_bb, cp_bc, cp_bd, cp_be, cp_bf,  // 0xB0
-    ret_c0, pop_c1, jp_c2, jp_c3, call_c4, push_c5, add_c6, rst_c7, ret_c8, ret_c9, jp_ca, prefix_cb, call_cc, call_cd, adc_ce, rst_cf,  // 0xC0
-    ret_d0, pop_d1, jp_d2, invalid, call_d4, push_d5, sub_d6, rst_d7, ret_d8, reti_d9, jp_da, invalid, call_dc, invalid, sbc_de, rst_df,  // 0xD0
-    ld_e0, pop_e1, ld_e2, invalid, invalid, push_e5, and_e6, rst_e7, add_e8, jp_e9, ld_ea, invalid, invalid, invalid, xor_ee, rst_ef,  // 0xE0
-    ld_f0, pop_f1, ld_f2, di_f3, invalid, push_f5, or_f6, rst_f7, ld_f8, ld_f9, ld_fa, ei_fb, invalid, invalid, cp_fe, rst_ff,  // 0xF0
+    nop_00, ld_01, ld_02, inc_03, inc_04, dec_05, ld_06, rlca_07, ld_08, add_09, ld_0a, dec_0b,
+    inc_0c, dec_0d, ld_0e, rrca_0f, // 0x00
+    stop_10, ld_11, ld_12, inc_13, inc_14, dec_15, ld_16, rla_17, jr_18, add_19, ld_1a, dec_1b,
+    inc_1c, dec_1d, ld_1e, rra_1f, // 0x10
+    jr_20, ld_21, ld_22, inc_23, inc_24, dec_25, ld_26, daa_27, jr_28, add_29, ld_2a, dec_2b,
+    inc_2c, dec_2d, ld_2e, cpl_2f, // 0x20
+    jr_30, ld_31, ld_32, inc_33, inc_34, dec_35, ld_36, scf_37, jr_38, add_39, ld_3a, dec_3b,
+    inc_3c, dec_3d, ld_3e, ccf_3f, // 0x30
+    ld_40, ld_41, ld_42, ld_43, ld_44, ld_45, ld_46, ld_47, ld_48, ld_49, ld_4a, ld_4b, ld_4c,
+    ld_4d, ld_4e, ld_4f, // 0x40
+    ld_50, ld_51, ld_52, ld_53, ld_54, ld_55, ld_56, ld_57, ld_58, ld_59, ld_5a, ld_5b, ld_5c,
+    ld_5d, ld_5e, ld_5f, // 0x50
+    ld_60, ld_61, ld_62, ld_63, ld_64, ld_65, ld_66, ld_67, ld_68, ld_69, ld_6a, ld_6b, ld_6c,
+    ld_6d, ld_6e, ld_6f, // 0x60
+    ld_70, ld_71, ld_72, ld_73, ld_74, ld_75, halt_76, ld_77, ld_78, ld_79, ld_7a, ld_7b, ld_7c,
+    ld_7d, ld_7e, ld_7f, // 0x70
+    add_80, add_81, add_82, add_83, add_84, add_85, add_86, add_87, adc_88, adc_89, adc_8a, adc_8b,
+    adc_8c, adc_8d, adc_8e, adc_8f, // 0x80
+    sub_90, sub_91, sub_92, sub_93, sub_94, sub_95, sub_96, sub_97, sbc_98, sbc_99, sbc_9a, sbc_9b,
+    sbc_9c, sbc_9d, sbc_9e, sbc_9f, // 0x90
+    and_a0, and_a1, and_a2, and_a3, and_a4, and_a5, and_a6, and_a7, xor_a8, xor_a9, xor_aa, xor_ab,
+    xor_ac, xor_ad, xor_ae, xor_af, // 0xA0
+    or_b0, or_b1, or_b2, or_b3, or_b4, or_b5, or_b6, or_b7, cp_b8, cp_b9, cp_ba, cp_bb, cp_bc,
+    cp_bd, cp_be, cp_bf, // 0xB0
+    ret_c0, pop_c1, jp_c2, jp_c3, call_c4, push_c5, add_c6, rst_c7, ret_c8, ret_c9, jp_ca,
+    prefix_cb, call_cc, call_cd, adc_ce, rst_cf, // 0xC0
+    ret_d0, pop_d1, jp_d2, invalid, call_d4, push_d5, sub_d6, rst_d7, ret_d8, reti_d9, jp_da,
+    invalid, call_dc, invalid, sbc_de, rst_df, // 0xD0
+    ld_e0, pop_e1, ld_e2, invalid, invalid, push_e5, and_e6, rst_e7, add_e8, jp_e9, ld_ea, invalid,
+    invalid, invalid, xor_ee, rst_ef, // 0xE0
+    ld_f0, pop_f1, ld_f2, di_f3, invalid, push_f5, or_f6, rst_f7, ld_f8, ld_f9, ld_fa, ei_fb,
+    invalid, invalid, cp_fe, rst_ff, // 0xF0
 ];
 
 pub fn execute(cpu: &mut Cpu) -> u8 {
@@ -343,7 +359,7 @@ fn ld_3e(cpu: &mut Cpu) -> u8 {
 
 // LD B, B ----
 fn ld_40(_cpu: &mut Cpu) -> u8 {
-    1  // No need to copy value from register to itself
+    1 // No need to copy value from register to itself
 }
 
 // LD B, C ----
@@ -1363,8 +1379,8 @@ fn add_e8(cpu: &mut Cpu) -> u8 {
     let val = cpu.fetch() as i8 as u16;
     let sp = cpu.get_r16(Regs16::SP);
     let res = sp.wrapping_add(val);
-    let set_c = check_c_carry_u16(sp, val);
-    let set_h = check_h_carry_u16(sp, val);
+    let set_c = check_c_carry_u8(sp.low_byte(), val.low_byte());
+    let set_h = check_h_carry_u8(sp.low_byte(), val.low_byte());
 
     cpu.set_r16(Regs16::SP, res);
     cpu.set_flag(Flags::Z, false);
@@ -1613,7 +1629,6 @@ fn call_cd(cpu: &mut Cpu) -> u8 {
     6
 }
 
-
 // RST 08 ----
 fn rst_cf(cpu: &mut Cpu) -> u8 {
     cpu.push(cpu.get_pc());
@@ -1750,19 +1765,19 @@ fn prefix_cb(cpu: &mut Cpu) -> u8 {
 
 fn get_cb_reg(op: u8) -> Regs {
     match op & 0b111 {
-        0 => { Regs::B },
-        1 => { Regs::C },
-        2 => { Regs::D },
-        3 => { Regs::E },
-        4 => { Regs::H },
-        5 => { Regs::L },
-        6 => { Regs::HL },
-        7 => { Regs::A },
-        _ => unreachable!()
+        0 => Regs::B,
+        1 => Regs::C,
+        2 => Regs::D,
+        3 => Regs::E,
+        4 => Regs::H,
+        5 => Regs::L,
+        6 => Regs::HL,
+        7 => Regs::A,
+        _ => unreachable!(),
     }
 }
 
-fn execute_cb(cpu: &mut Cpu, op: u8) -> u8 {    
+fn execute_cb(cpu: &mut Cpu, op: u8) -> u8 {
     // 0x00-0x07 -> RLC
     // 0x08-0x0F -> RRC
     // 0x10-0x17 -> RL
@@ -1777,28 +1792,44 @@ fn execute_cb(cpu: &mut Cpu, op: u8) -> u8 {
 
     let cb_reg = get_cb_reg(op);
     match op {
-        0x00..=0x07 => { cpu.rotate_left(cb_reg, false); },
-        0x08..=0x0F => { cpu.rotate_right(cb_reg, false); },
-        0x10..=0x17 => { cpu.rotate_left(cb_reg, true); },
-        0x18..=0x1F => { cpu.rotate_right(cb_reg, true); },
-        0x20..=0x27 => { cpu.shift_left(cb_reg); },
-        0x28..=0x2F => { cpu.shift_right(cb_reg, true); },
-        0x30..=0x37 => { cpu.swap_bits(cb_reg); },
-        0x38..=0x3F => { cpu.shift_right(cb_reg, false); },
-        0x40..=0x7F => { 
+        0x00..=0x07 => {
+            cpu.rotate_left(cb_reg, false);
+        }
+        0x08..=0x0F => {
+            cpu.rotate_right(cb_reg, false);
+        }
+        0x10..=0x17 => {
+            cpu.rotate_left(cb_reg, true);
+        }
+        0x18..=0x1F => {
+            cpu.rotate_right(cb_reg, true);
+        }
+        0x20..=0x27 => {
+            cpu.shift_left(cb_reg);
+        }
+        0x28..=0x2F => {
+            cpu.shift_right(cb_reg, true);
+        }
+        0x30..=0x37 => {
+            cpu.swap_bits(cb_reg);
+        }
+        0x38..=0x3F => {
+            cpu.shift_right(cb_reg, false);
+        }
+        0x40..=0x7F => {
             // the 3rd, 4th and 5th bits will tell us about which
             // bit the opcode is gonna work on
             let bit = (op & 0b111000) >> 3;
             cpu.test_bit(cb_reg, bit);
-         },
+        }
         0x80..=0xBF => {
             let bit = (op & 0b111000) >> 3;
             cpu.write_bit(cb_reg, bit, false);
-        },
+        }
         0xC0..=0xFF => {
             let bit = (op & 0b111000) >> 3;
             cpu.write_bit(cb_reg, bit, true);
-        },
+        }
     }
     2
 }
@@ -1894,7 +1925,11 @@ fn halt_76(cpu: &mut Cpu) -> u8 {
 fn invalid(cpu: &mut Cpu) -> u8 {
     let pc = cpu.get_pc();
     let op = cpu.read_ram(pc.wrapping_sub(1));
-    println!("Invalid opcode: 0x{:02X} at PC: 0x{:04X}", op, pc.wrapping_sub(1));
+    println!(
+        "Invalid opcode: 0x{:02X} at PC: 0x{:04X}",
+        op,
+        pc.wrapping_sub(1)
+    );
     1
 }
 
@@ -1902,16 +1937,22 @@ fn invalid(cpu: &mut Cpu) -> u8 {
 fn daa_27(cpu: &mut Cpu) -> u8 {
     let mut a = cpu.get_r8(Regs::A);
     let mut adjust = if cpu.get_flag(Flags::C) { 0x60 } else { 0x00 };
-    if cpu.get_flag(Flags::H) { adjust |= 0x06; }
-    
+    if cpu.get_flag(Flags::H) {
+        adjust |= 0x06;
+    }
+
     if !cpu.get_flag(Flags::N) {
-        if a & 0x0F > 0x09 { adjust |= 0x06; }
-        if a > 0x99 { adjust |= 0x60; }
+        if a & 0x0F > 0x09 {
+            adjust |= 0x06;
+        }
+        if a > 0x99 {
+            adjust |= 0x60;
+        }
         a = a.wrapping_add(adjust);
     } else {
         a = a.wrapping_sub(adjust);
     }
-    
+
     cpu.set_flag(Flags::C, adjust >= 0x60);
     cpu.set_flag(Flags::H, false);
     cpu.set_flag(Flags::Z, a == 0);

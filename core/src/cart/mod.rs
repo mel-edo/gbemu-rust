@@ -43,14 +43,7 @@ pub enum MBC {
     INV,
 }
 
-const RAM_SIZES: [usize; 6] = [
-    0,
-    2,
-    8,
-    32,
-    128,
-    64,
-];
+const RAM_SIZES: [usize; 6] = [0, 2, 8, 32, 128, 64];
 
 pub struct Cart {
     rom: Vec<u8>,
@@ -82,21 +75,17 @@ impl Cart {
     fn get_mbc(&self) -> MBC {
         let cart_type = self.rom[CART_TYPE_ADDR];
         match cart_type {
-            0x00 => { MBC::NONE },
-            0x01..=0x03 => { MBC::MBC1 },
-            0x05..=0x06 => { MBC::MBC2 },
-            0x0F..=0x13 => { MBC::MBC3 },
-            0x19..=0x1E => { MBC::MBC5 },
-            _ => { MBC::INV },
+            0x00 => MBC::NONE,
+            0x01..=0x03 => MBC::MBC1,
+            0x05..=0x06 => MBC::MBC2,
+            0x0F..=0x13 => MBC::MBC3,
+            0x19..=0x1E => MBC::MBC5,
+            _ => MBC::INV,
         }
     }
-    
+
     pub fn has_battery(&self) -> bool {
-        let has_battery = [
-            0x03, 0x06, 0x09,
-            0x0D, 0x0F, 0x10,
-            0x13, 0x1B, 0x1E,
-        ];
+        let has_battery = [0x03, 0x06, 0x09, 0x0D, 0x0F, 0x10, 0x13, 0x1B, 0x1E];
 
         let cart_type = self.rom[CART_TYPE_ADDR];
         has_battery.contains(&cart_type)
@@ -121,11 +110,8 @@ impl Cart {
 
     fn has_external_ram(&self) -> bool {
         let has_ext_ram = [
-            0x02, 0x03, 0x08,
-            0x09, 0x0C, 0x0D,
-            0x10, 0x12, 0x13,
-            0x16, 0x17, 0x1A,
-            0x1B, 0x1D, 0x1E,
+            0x02, 0x03, 0x08, 0x09, 0x0C, 0x0D, 0x10, 0x12, 0x13, 0x16, 0x17, 0x1A, 0x1B, 0x1D,
+            0x1E,
         ];
 
         let cart_type = self.rom[CART_TYPE_ADDR];
@@ -176,24 +162,28 @@ impl Cart {
 
     pub fn write_cart(&mut self, addr: u16, val: u8) {
         match self.mbc {
-            MBC::NONE => {},
-            MBC::MBC1 => { self.mbc1_write_rom(addr, val); },
-            MBC::MBC2 => { self.mbc2_write_rom(addr, val); },
-            MBC::MBC3 => { self.mbc3_write_rom(addr, val); },
-            MBC::MBC5 => { self.mbc5_write_rom(addr, val); },
-            _ => unimplemented!()
+            MBC::NONE => {}
+            MBC::MBC1 => {
+                self.mbc1_write_rom(addr, val);
+            }
+            MBC::MBC2 => {
+                self.mbc2_write_rom(addr, val);
+            }
+            MBC::MBC3 => {
+                self.mbc3_write_rom(addr, val);
+            }
+            MBC::MBC5 => {
+                self.mbc5_write_rom(addr, val);
+            }
+            _ => unimplemented!(),
         }
     }
 
     pub fn read_ram(&self, addr: u16) -> u8 {
         match self.mbc {
-            MBC::NONE | MBC::MBC1 | MBC::MBC2 | MBC::MBC5 => {
-                self.read_ram_helper(addr)
-            },
-            MBC::MBC3 => {
-                self.mbc3_read_ram(addr)
-            }
-            _ => unimplemented!()
+            MBC::NONE | MBC::MBC1 | MBC::MBC2 | MBC::MBC5 => self.read_ram_helper(addr),
+            MBC::MBC3 => self.mbc3_read_ram(addr),
+            _ => unimplemented!(),
         }
     }
 
@@ -204,10 +194,10 @@ impl Cart {
                     let rel_addr = addr - EXT_RAM_START;
                     self.ram[rel_addr as usize] = val;
                 }
-            },
+            }
             MBC::MBC1 | MBC::MBC2 | MBC::MBC5 => self.write_ram_helper(addr, val),
             MBC::MBC3 => self.mbc3_write_ram(addr, val),
-            _ => unimplemented!()
+            _ => unimplemented!(),
         }
     }
 
@@ -230,17 +220,17 @@ impl Cart {
         match addr {
             RAM_ENABLE_START..=RAM_ENABLE_STOP => {
                 self.ram_enabled = val == 0x0A;
-            },
+            }
             ROM_BANK_NUM_START..=ROM_BANK_NUM_STOP => {
                 self.rom_bank = (val & 0x1F) as u16;
-            },
+            }
             RAM_BANK_NUM_START..=RAM_BANK_NUM_STOP => {
                 self.ram_bank = val & 0b11;
-            },
+            }
             ROM_RAM_MODE_START..=ROM_RAM_MODE_STOP => {
                 self.rom_mode = val == 0;
-            },
-            _ => unreachable!()
+            }
+            _ => unreachable!(),
         }
     }
 
@@ -258,17 +248,17 @@ impl Cart {
         match addr {
             RAM_ENABLE_START..=RAM_ENABLE_STOP => {
                 self.ram_enabled = val == 0x0A;
-            },
+            }
             ROM_BANK_NUM_START..=ROM_BANK_NUM_STOP => {
                 if val == 0x00 {
                     self.rom_bank = 0x01;
                 } else {
                     self.rom_bank = val as u16;
                 }
-            },
+            }
             RAM_BANK_NUM_START..=RAM_BANK_NUM_STOP => {
                 self.ram_bank = val;
-            },
+            }
             ROM_RAM_MODE_START..=ROM_RAM_MODE_STOP => {
                 if val == 0x00 {
                     self.latch_pending = true;
@@ -278,8 +268,8 @@ impl Cart {
                 } else {
                     self.latch_pending = false;
                 }
-            },
-            _ => unreachable!()
+            }
+            _ => unreachable!(),
         }
     }
 
@@ -287,12 +277,12 @@ impl Cart {
         match self.ram_bank {
             0x00..=0x03 => {
                 self.write_ram_helper(addr, val);
-            },
+            }
             0x08..=0x0C => {
                 if self.ram_enabled {
                     self.rtc.write_byte(self.ram_bank, val);
                 }
-            },
+            }
             _ => {}
         }
     }
@@ -326,18 +316,18 @@ impl Cart {
         match addr {
             RAM_ENABLE_START..=RAM_ENABLE_STOP => {
                 self.ram_enabled = val == 0x0A;
-            },
+            }
             ROM_BANK_LOW_START..=ROM_BANK_LOW_STOP => {
                 self.rom_bank &= 0xFF00;
                 self.rom_bank |= val as u16;
-            },
+            }
             ROM_BANK_HIGH_START..=ROM_BANK_HIGH_STOP => {
                 self.rom_bank.set_bit(8, val.get_bit(0));
-            },
+            }
             RAM_BANK_NUM_START..=RAM_BANK_NUM_STOP => {
                 self.ram_bank = val & 0x0F;
-            },
-            _ => unreachable!()
+            }
+            _ => unreachable!(),
         }
     }
 

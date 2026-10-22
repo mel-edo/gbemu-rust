@@ -87,9 +87,7 @@ impl IO {
 
     pub fn write_u8(&mut self, addr: u16, val: u8) {
         match addr {
-            DIV..=TAC => {
-                self.timer.write_timer(addr, val);
-            }
+            DIV..=TAC => self.timer.write_timer(addr, val),
             JOYPAD_ADDR => {
                 self.face_selected = !val.get_bit(FACE_SELECT_BIT);
                 self.dpad_selected = !val.get_bit(DPAD_SELECT_BIT);
