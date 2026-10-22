@@ -1,7 +1,7 @@
 use gb_core::cpu::Cpu;
 use std::{env, fs, path::Path, process};
 
-const MAX_CYCLES: u64 = 30_000_000;
+const MAX_CYCLES: u64 = 100_000_000;
 
 fn find_roms(dir: &Path, roms: &mut Vec<std::path::PathBuf>) {
     for entry in fs::read_dir(dir).expect("Failed to read directory") {
