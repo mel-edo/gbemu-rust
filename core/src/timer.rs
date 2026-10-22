@@ -40,7 +40,21 @@ impl Timer {
     pub fn write_timer(&mut self, addr: u16, val: u8) {
         match addr {
             DIV => {
+                // Writing to DIV resets the divider counter to 0.
+                // If the TIMA clock bit was 1 and becomes 0, this is a falling edge
+                // that should increment TIMA (if timer is enabled).
+                let old_bit = self.tima_status();
                 self.div_counter = 0;
+                let new_bit = self.tima_status();
+                let enabled = self.tac.get_bit(TAC_ENABLE_BIT);
+                
+                if enabled && old_bit && !new_bit && self.tima_cooldown == 0 {
+                    let (new_tima, overflow) = self.tima.overflowing_add(1);
+                    self.tima = new_tima;
+                    if overflow {
+                        self.tima_cooldown = TIMA_COOLDOWN_OVERFLOW;
+                    }
+                }
             }
             TIMA => {
                 self.tima = val;
@@ -49,7 +63,21 @@ impl Timer {
             TMA => {
                 self.tma = val;
             }
-            TAC => self.tac = val,
+            TAC => {
+                // Writing to TAC can change the clock source, which might cause a falling edge
+                let old_bit = self.tima_status();
+                self.tac = val;
+                let new_bit = self.tima_status();
+                let enabled = self.tac.get_bit(TAC_ENABLE_BIT);
+                
+                if enabled && old_bit && !new_bit && self.tima_cooldown == 0 {
+                    let (new_tima, overflow) = self.tima.overflowing_add(1);
+                    self.tima = new_tima;
+                    if overflow {
+                        self.tima_cooldown = TIMA_COOLDOWN_OVERFLOW;
+                    }
+                }
+            }
             _ => unreachable!("Trying to write a non-timer register"),
         }
     }
