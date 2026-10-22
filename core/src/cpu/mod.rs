@@ -463,6 +463,10 @@ impl Cpu {
         self.halted = halted;
     }
 
+    pub fn is_halted(&self) -> bool {
+        self.halted
+    }
+
     pub fn tick(&mut self) -> bool {
         self.last_read = None;
         self.last_write = None;
