@@ -4,6 +4,8 @@ const BG_PRIORITY_BIT: u8 = 7;
 const Y_FLIP_BIT: u8 = 6;
 const X_FLIP_BIT: u8 = 5;
 const PALETTE_BIT: u8 = 4;
+const CGB_VRAM_BANK_BIT: u8 = 3;
+const CGB_PALETTE_MASK: u8 = 0x07;
 const Y_OFFSET: isize = 16;
 const X_OFFSET: isize = 8;
 
@@ -14,7 +16,10 @@ pub struct Sprite {
     bg_priority: bool,
     x_flip: bool,
     y_flip: bool,
-    palette1: bool,
+    palette1: bool,       // DMG: palette 0/1, CGB: bit 4 of palette index
+    vram_bank: bool,      // CGB only: VRAM bank (0/1)
+    cgb_palette: u8,      // CGB only: palette number (0-7)
+    is_cgb: bool,
 }
 
 impl Sprite {
@@ -26,7 +31,14 @@ impl Sprite {
             x_flip: false,
             y_flip: false,
             palette1: false,
+            vram_bank: false,
+            cgb_palette: 0,
+            is_cgb: false,
         }
+    }
+
+    pub fn set_cgb(&mut self, is_cgb: bool) {
+        self.is_cgb = is_cgb;
     }
 
     pub fn read_u8(&self, addr: u16) -> u8 {
@@ -40,7 +52,13 @@ impl Sprite {
                 ret.set_bit(BG_PRIORITY_BIT, self.bg_priority);
                 ret.set_bit(Y_FLIP_BIT, self.y_flip);
                 ret.set_bit(X_FLIP_BIT, self.x_flip);
-                ret.set_bit(PALETTE_BIT, self.palette1);
+                if self.is_cgb {
+                    ret.set_bit(PALETTE_BIT, (self.cgb_palette & 0x08) != 0);
+                    ret.set_bit(CGB_VRAM_BANK_BIT, self.vram_bank);
+                    ret |= self.cgb_palette & CGB_PALETTE_MASK;
+                } else {
+                    ret.set_bit(PALETTE_BIT, self.palette1);
+                }
                 ret
             }
             _ => {
@@ -65,7 +83,14 @@ impl Sprite {
                 self.bg_priority = val.get_bit(BG_PRIORITY_BIT);
                 self.y_flip = val.get_bit(Y_FLIP_BIT);
                 self.x_flip = val.get_bit(X_FLIP_BIT);
-                self.palette1 = val.get_bit(PALETTE_BIT);
+                if self.is_cgb {
+                    self.vram_bank = val.get_bit(CGB_VRAM_BANK_BIT);
+                    self.cgb_palette = val & CGB_PALETTE_MASK;
+                    // In CGB mode, bit 4 is part of palette index
+                    self.palette1 = (val & 0x10) != 0;
+                } else {
+                    self.palette1 = val.get_bit(PALETTE_BIT);
+                }
             }
             _ => {
                 unreachable!();
@@ -96,5 +121,18 @@ impl Sprite {
     }
     pub fn use_palette1(&self) -> bool {
         self.palette1
+    }
+
+    // CGB-specific getters
+    pub fn get_vram_bank(&self) -> bool {
+        self.vram_bank
+    }
+
+    pub fn get_cgb_palette(&self) -> u8 {
+        if self.is_cgb {
+            self.cgb_palette | (if self.palette1 { 0x08 } else { 0 })
+        } else {
+            if self.palette1 { 1 } else { 0 }
+        }
     }
 }

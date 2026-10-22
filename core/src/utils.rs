@@ -82,6 +82,29 @@ pub const GB_PALETTE: [[u8; 4]; 4] = [
     [0, 0, 0, 255]
 ];
 
+// CGB Color Palettes - 32768 colors (15-bit RGB555)
+pub const CGB_PALETTE_SIZE: usize = 64; // 8 palettes * 4 colors each for BG and OBJ
+
+// CGB Register addresses
+pub const KEY1: u16 = 0xFF4D;      // Speed switch
+pub const VBK: u16 = 0xFF4F;       // VRAM bank select
+pub const HDMA1: u16 = 0xFF51;     // HDMA source high
+pub const HDMA2: u16 = 0xFF52;     // HDMA source low
+pub const HDMA3: u16 = 0xFF53;     // HDMA dest high
+pub const HDMA4: u16 = 0xFF54;     // HDMA dest low
+pub const HDMA5: u16 = 0xFF55;     // HDMA length/mode/start
+pub const RP: u16 = 0xFF56;        // Infrared (CGB only)
+pub const BCPS: u16 = 0xFF68;      // BG palette index/spec
+pub const BCPD: u16 = 0xFF69;      // BG palette data
+pub const OCPS: u16 = 0xFF6A;      // OBJ palette index/spec
+pub const OCPD: u16 = 0xFF6B;      // OBJ palette data
+pub const SVBK: u16 = 0xFF70;      // WRAM bank select
+
+// HDMA constants
+pub const HDMA_GDMA_MODE: u8 = 0x80;  // Bit 7: 0=GDMA (immediate), 1=HDMA (during HBlank)
+pub const HDMA_LENGTH_MASK: u8 = 0x7F; // Bits 0-6: length (blocks - 1)
+pub const HDMA_BLOCK_SIZE: usize = 0x10; // 16 bytes per block
+
 #[derive(Clone, Copy)]
 pub struct Point {
     pub x: u8,

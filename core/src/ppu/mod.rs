@@ -95,6 +95,9 @@ impl Ppu {
 
     pub fn set_cgb(&mut self, is_cgb: bool) {
         self.is_cgb = is_cgb;
+        for sprite in &mut self.oam {
+            sprite.set_cgb(is_cgb);
+        }
     }
 
     pub fn update(&mut self, m_cycles: u8) -> PpuUpdateResult {
@@ -275,20 +278,20 @@ impl Ppu {
         }
     }
 
-    pub fn render_scanline(&mut self) {
+    pub fn render_scanline(&mut self, bg_palette: [u8; 64], obj_palette: [u8; 64]) {
         let line = self.read_lcd_reg(LY);
         let mut row = [0xFF; SCREEN_WIDTH * 4];
 
         if self.is_bg_layer_displayed() {
-            self.render_bg(&mut row, line);
+            self.render_bg(&mut row, line, bg_palette, obj_palette);
         }
 
         if self.is_window_layer_displayed() {
-            self.render_window(&mut row, line);
+            self.render_window(&mut row, line, bg_palette, obj_palette);
         }
 
         if self.is_sprite_layer_displayed() {
-            self.render_sprites(&mut row, line);
+            self.render_sprites(&mut row, line, bg_palette, obj_palette);
         }
 
         let start_idx = line as usize * SCREEN_WIDTH * 4;
@@ -296,7 +299,7 @@ impl Ppu {
         self.screen_buffer[start_idx..end_idx].copy_from_slice(&row);
     }
 
-    fn render_sprites(&self, buffer: &mut [u8], line: u8) {
+    fn render_sprites(&self, buffer: &mut [u8], line: u8, bg_palette_data: [u8; 64], obj_palette_data: [u8; 64]) {
         let sprites = self.sort_sprites();
         let bg_palette = self.get_bg_palette();
         let is_8x16 = self.are_sprites_8x16();
@@ -308,7 +311,12 @@ impl Ppu {
                 continue;
             }
             
-            let palette = self.get_sprite_palette(spr.use_palette1());
+            let palette_idx = spr.get_cgb_palette();
+            let palette = if self.is_cgb {
+                None
+            } else {
+                Some(self.get_sprite_palette(spr.use_palette1()))
+            };
             let behind_bg = spr.get_bg_priority();
             let y = (signed_line - coords.1) as isize;
             let y_flipped = spr.is_y_flipped();
@@ -322,7 +330,13 @@ impl Ppu {
             } else {
                 spr.get_tile_num()
             };
-            let tile = self.tiles[spr_idx as usize];
+            
+            let tile = if self.is_cgb && spr.get_vram_bank() {
+                self.tiles[(spr_idx as usize) + NUM_TILES]
+            } else {
+                self.tiles[spr_idx as usize]
+            };
+            
             let screen_y = y + coords.1;
             if screen_y < 0 || screen_y >= SCREEN_HEIGHT as isize {
                 continue;
@@ -333,7 +347,6 @@ impl Ppu {
             for x in 0..8 {
                 let data_x = if spr.is_x_flipped() { 7 - x } else { x };
                 let cell = row[data_x as usize];
-                // continue if pixel is transparent
                 if cell == 0 {
                     continue;
                 }
@@ -343,12 +356,20 @@ impl Ppu {
                 }
                 let buffer_idx = 4 * (screen_x as usize);
                 let current_rgba = &buffer[buffer_idx..(buffer_idx + 4)];
-                // If current RGBA value isn't the transparent color, continue
-                if behind_bg && current_rgba != GB_PALETTE[bg_palette[0] as usize] {
+                let bg_color_0 = if self.is_cgb {
+                    Self::rgb555_to_rgba(bg_palette_data, 0, 0)
+                } else {
+                    GB_PALETTE[bg_palette[0] as usize]
+                };
+                if behind_bg && current_rgba != bg_color_0 {
                     continue;
                 }
-                let color_idx = palette[cell as usize];
-                let color = GB_PALETTE[color_idx as usize];
+                let color = if self.is_cgb {
+                    Self::rgb555_to_rgba(obj_palette_data, palette_idx, cell)
+                } else {
+                    let color_idx = palette.unwrap()[cell as usize];
+                    GB_PALETTE[color_idx as usize]
+                };
                 for i in 0..4 {
                     buffer[buffer_idx + i] = color[i];
                 }
@@ -363,7 +384,7 @@ impl Ppu {
         sprites
     }
 
-    fn render_bg(&self, buffer: &mut [u8], line: u8) {
+    fn render_bg(&self, buffer: &mut [u8], line: u8, bg_palette_data: [u8; 64], obj_palette_data: [u8; 64]) {
         let map_offset = self.get_bg_tile_map_index() as usize * TILE_MAP_TABLE_SIZE;
         let palette = self.get_bg_palette();
         let viewport = self.get_viewport_coords();
@@ -376,16 +397,42 @@ impl Ppu {
             let col = current_x % TILESIZE;
             let map_num = (y / TILESIZE) * LAYERSIZE + (x / TILESIZE);
             let tile_index = self.maps[map_offset + map_num] as usize;
+            
+            let (tile_vram_bank, tile_palette, tile_x_flip, tile_y_flip, _tile_priority) = if self.is_cgb {
+                let attr = self.maps[map_offset + map_num + TILE_MAP_SIZE];
+                (
+                    (attr & 0x08) != 0,
+                    attr & 0x07,
+                    (attr & 0x20) != 0,
+                    (attr & 0x40) != 0,
+                    (attr & 0x80) != 0,
+                )
+            } else {
+                (false, 0, false, false, false)
+            };
+            
             let adjusted_tile_index = if self.get_bg_wndw_tile_set_index() == 1 {
                 tile_index as usize
             } else {
                 (256 + tile_index as i8 as isize) as usize
             };
-            let tile = self.tiles[adjusted_tile_index];
-            let data = tile.get_row(row as u8);
-            let cell = data[col];
-            let color_idx = palette[cell as usize];
-            let color = GB_PALETTE[color_idx as usize];
+            
+            let tile = if self.is_cgb && tile_vram_bank {
+                self.tiles[adjusted_tile_index + NUM_TILES]
+            } else {
+                self.tiles[adjusted_tile_index]
+            };
+            
+            let data = tile.get_row(if tile_y_flip { 7 - row as u8 } else { row as u8 });
+            let cell = if tile_x_flip { data[7 - col] } else { data[col] };
+            
+            let color = if self.is_cgb {
+                Self::rgb555_to_rgba(bg_palette_data, tile_palette, cell)
+            } else {
+                let color_idx = palette[cell as usize];
+                GB_PALETTE[color_idx as usize]
+            };
+            
             for i in 0..4 {
                 buffer[4 * px + i] = color[i];
             }
@@ -393,7 +440,7 @@ impl Ppu {
         
     }
 
-    fn render_window(&self, buffer: &mut [u8], line: u8) {
+    fn render_window(&self, buffer: &mut [u8], line: u8, bg_palette_data: [u8; 64], obj_palette_data: [u8; 64]) {
         let map_offset = self.get_wndw_tile_map_index() as usize * TILE_MAP_TABLE_SIZE;
         let palette = self.get_bg_palette();
         let coords = self.get_window_coords();
@@ -407,21 +454,58 @@ impl Ppu {
             let col = win_x % TILESIZE;
             let map_num = (y / TILESIZE) * LAYERSIZE + (win_x / TILESIZE);
             let tile_index = self.maps[map_offset + map_num] as usize;
+            
+            let (tile_vram_bank, tile_palette, tile_x_flip, tile_y_flip, _tile_priority) = if self.is_cgb {
+                let attr = self.maps[map_offset + map_num + TILE_MAP_SIZE];
+                (
+                    (attr & 0x08) != 0,
+                    attr & 0x07,
+                    (attr & 0x20) != 0,
+                    (attr & 0x40) != 0,
+                    (attr & 0x80) != 0,
+                )
+            } else {
+                (false, 0, false, false, false)
+            };
+            
             let adjusted_tile_index = if self.get_bg_wndw_tile_set_index() == 1 {
                 tile_index as usize
             } else {
                 (256 + tile_index as i8 as isize) as usize
             };
-            let tile = self.tiles[adjusted_tile_index];
-            let data = tile.get_row(row as u8);
-            let cell = data[col];
-            let color_idx = palette[cell as usize];
-            let color = GB_PALETTE[color_idx as usize];
-            // let buffer_idx = 4 * (y * SCREEN_WIDTH + x);
+            
+            let tile = if self.is_cgb && tile_vram_bank {
+                self.tiles[adjusted_tile_index + NUM_TILES]
+            } else {
+                self.tiles[adjusted_tile_index]
+            };
+            
+            let data = tile.get_row(if tile_y_flip { 7 - row as u8 } else { row as u8 });
+            let cell = if tile_x_flip { data[7 - col] } else { data[col] };
+            
+            let color = if self.is_cgb {
+                Self::rgb555_to_rgba(bg_palette_data, tile_palette, cell)
+            } else {
+                let color_idx = palette[cell as usize];
+                GB_PALETTE[color_idx as usize]
+            };
+            
             let buffer_idx = 4 * x;
             for i in 0..4 {
                 buffer[buffer_idx + i] = color[i];
             }
         }
+    }
+
+    // Helper function to convert CGB 15-bit RGB555 to RGBA
+    fn rgb555_to_rgba(palette_data: [u8; 64], palette_idx: u8, color_idx: u8) -> [u8; 4] {
+        let idx = ((palette_idx as usize) * 8 + (color_idx as usize) * 2) & 0x3F;
+        let lo = palette_data[idx] as u16;
+        let hi = palette_data[idx + 1] as u16;
+        let color = lo | (hi << 8);
+        let r = ((color & 0x1F) as u32 * 527 + 23) >> 6;
+        let g = (((color >> 5) & 0x1F) as u32 * 527 + 23) >> 6;
+        let b = (((color >> 10) & 0x1F) as u32 * 527 + 23) >> 6;
+        [r as u8, g as u8, b as u8, 255]
     }
 }
