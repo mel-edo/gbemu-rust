@@ -6,14 +6,25 @@ pub const TMA: u16 = 0xFF06;
 pub const TAC: u16 = 0xFF07;
 
 const TAC_ENABLE_BIT: u8 = 2;
-const TIMA_COOLDOWN_OVERFLOW: u8 = 4;
+
+// Timer overflow takes 1 M-cycle: TIMA=00 for 1 M-cycle, then TMA loaded + IF set
+const TIMA_OVERFLOW_CYCLES: u8 = 1;
+
+#[derive(PartialEq)]
+enum TimerState {
+    Normal,
+    OverflowCycleA,  // TIMA=00, waiting for cycle B
+    OverflowCycleB,  // Loading TMA, setting IF
+}
 
 pub struct Timer {
     div_counter: u16,
     tima: u8,
     tma: u8,
     tac: u8,
-    tima_cooldown: u8,
+    state: TimerState,
+    overflow_pending_tma: u8,
+    is_cgb: bool,
 }
 
 impl Timer {
@@ -23,8 +34,14 @@ impl Timer {
             tima: 0,
             tma: 0,
             tac: 0,
-            tima_cooldown: 0,
+            state: TimerState::Normal,
+            overflow_pending_tma: 0,
+            is_cgb: false,
         }
+    }
+
+    pub fn set_cgb(&mut self, is_cgb: bool) {
+        self.is_cgb = is_cgb;
     }
 
     pub fn read_timer(&self, addr: u16) -> u8 {
@@ -48,67 +65,99 @@ impl Timer {
                 let new_bit = self.tima_status();
                 let enabled = self.tac.get_bit(TAC_ENABLE_BIT);
                 
-                if enabled && old_bit && !new_bit && self.tima_cooldown == 0 {
-                    let (new_tima, overflow) = self.tima.overflowing_add(1);
-                    self.tima = new_tima;
-                    if overflow {
-                        self.tima_cooldown = TIMA_COOLDOWN_OVERFLOW;
-                    }
+                if enabled && old_bit && !new_bit && self.state == TimerState::Normal {
+                    self.increment_tima();
+                }
+                
+                // Also reset overflow state if in progress
+                if self.state != TimerState::Normal {
+                    self.state = TimerState::Normal;
                 }
             }
             TIMA => {
-                self.tima = val;
-                self.tima_cooldown = 0;
+                // Writing to TIMA during OverflowCycleA blocks the reload
+                // Writing to TIMA during OverflowCycleB is ignored
+                if self.state == TimerState::OverflowCycleA {
+                    // Block the reload - stay in Normal state with new value
+                    self.tima = val;
+                    self.state = TimerState::Normal;
+                } else if self.state == TimerState::OverflowCycleB {
+                    // Ignored - TIMA will be overwritten with TMA anyway
+                } else {
+                    self.tima = val;
+                }
             }
             TMA => {
                 self.tma = val;
+                // If in OverflowCycleB, the new TMA value is loaded immediately
+                if self.state == TimerState::OverflowCycleB {
+                    self.tima = val;
+                    self.overflow_pending_tma = val;
+                }
             }
             TAC => {
                 // Writing to TAC can change the clock source, which might cause a falling edge
                 let old_bit = self.tima_status();
+                let old_enabled = self.tac.get_bit(TAC_ENABLE_BIT);
                 self.tac = val;
                 let new_bit = self.tima_status();
                 let enabled = self.tac.get_bit(TAC_ENABLE_BIT);
                 
-                if enabled && old_bit && !new_bit && self.tima_cooldown == 0 {
-                    let (new_tima, overflow) = self.tima.overflowing_add(1);
-                    self.tima = new_tima;
-                    if overflow {
-                        self.tima_cooldown = TIMA_COOLDOWN_OVERFLOW;
-                    }
+                // DMG-specific: disabling timer when selected bit is 1 triggers TIMA tick
+                if !self.is_cgb && old_enabled && !enabled && old_bit && self.state == TimerState::Normal {
+                    self.increment_tima();
+                }
+                
+                // Clock source change from 1->0 triggers falling edge
+                if enabled && old_bit && !new_bit && self.state == TimerState::Normal {
+                    self.increment_tima();
                 }
             }
             _ => unreachable!("Trying to write a non-timer register"),
         }
     }
 
+    fn increment_tima(&mut self) {
+        let (new_tima, overflow) = self.tima.overflowing_add(1);
+        self.tima = new_tima;
+
+        if overflow {
+            // Enter overflow sequence: Cycle A (TIMA=00)
+            self.tima = 0x00;
+            self.overflow_pending_tma = self.tma;
+            self.state = TimerState::OverflowCycleA;
+        }
+    }
+
     pub fn tick(&mut self, m_cycles: u8) -> bool {
         let mut interrupt = false;
         let t_cycles = 4 * m_cycles;
-        let _period = self.get_tima_period();
 
         for _ in 0..t_cycles {
             let old_bit = self.tima_status();
 
             self.div_counter = self.div_counter.wrapping_add(1);
 
+            // Handle overflow state machine
+            match self.state {
+                TimerState::OverflowCycleA => {
+                    // Cycle A: TIMA=00, transition to Cycle B
+                    self.state = TimerState::OverflowCycleB;
+                }
+                TimerState::OverflowCycleB => {
+                    // Cycle B: Load TMA, set IF
+                    self.tima = self.overflow_pending_tma;
+                    interrupt = true;
+                    self.state = TimerState::Normal;
+                }
+                TimerState::Normal => {}
+            }
+
             let new_bit = self.tima_status();
             let enabled = self.tac.get_bit(TAC_ENABLE_BIT);
 
-            if self.tima_cooldown != 0 {
-                self.tima_cooldown -= 1;
-
-                if self.tima_cooldown == 0 {
-                    self.tima = self.tma;
-                    interrupt = true;
-                }
-            } else if enabled && old_bit && !new_bit {
-                let (new_tima, overflow) = self.tima.overflowing_add(1);
-                self.tima = new_tima;
-
-                if overflow {
-                    self.tima_cooldown = TIMA_COOLDOWN_OVERFLOW;
-                }
+            if self.state == TimerState::Normal && enabled && old_bit && !new_bit {
+                self.increment_tima();
             }
         }
 

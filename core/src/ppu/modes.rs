@@ -1,7 +1,9 @@
-const HBLANK_LEN: usize = 204;
-const VBLANK_LEN: usize = 456;
-const OAM_READ_LEN: usize = 80;
-const VRAM_READ_LEN: usize = 172;
+// PPU timing in M-cycles (1 M-cycle = 4 dots)
+// Based on pandocs: https://gbdev.io/pandocs/Rendering.html#ppu-modes
+const HBLANK_LEN: usize = 51;       // 204 dots = 51 M-cycles
+const VBLANK_LEN: usize = 1140;     // 10 scanlines × 456 dots = 4560 dots = 1140 M-cycles
+const OAM_READ_LEN: usize = 20;     // 80 dots = 20 M-cycles
+const VRAM_READ_LEN: usize = 43;    // 172 dots minimum = 43 M-cycles (variable up to 289 dots = 72 M-cycles)
 const VBLANK_LINE_START: u8 = 144;
 const VBLANK_LINE_END: u8 = 153;
 

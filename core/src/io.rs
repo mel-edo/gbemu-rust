@@ -85,6 +85,10 @@ impl IO {
         self.buttons[button as usize] = pressed;
     }
 
+    pub fn set_cgb_timer(&mut self, is_cgb: bool) {
+        self.timer.set_cgb(is_cgb);
+    }
+
     pub fn write_u8(&mut self, addr: u16, val: u8) {
         match addr {
             DIV..=TAC => self.timer.write_timer(addr, val),

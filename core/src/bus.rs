@@ -83,6 +83,7 @@ impl Bus {
         self.is_cgb = is_cgb;
         self.ppu.set_cgb(is_cgb);
         self.wram.set_cgb(is_cgb);
+        self.io.set_cgb_timer(is_cgb);
         
         if is_cgb {
             // Initialize CGB palettes to DMG-equivalent grayscale palette
