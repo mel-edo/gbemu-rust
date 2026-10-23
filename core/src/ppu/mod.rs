@@ -77,6 +77,7 @@ pub struct Ppu {
     oam: [Sprite; NUM_OAM_SPRITES],
     vbk: u8,
     is_cgb: bool,
+    window_line: u8,
 }
 
 impl Ppu {
@@ -90,6 +91,7 @@ impl Ppu {
             oam: [Sprite::new(); NUM_OAM_SPRITES],
             vbk: 0,
             is_cgb: false,
+            window_line: 0,
         }
     }
 
@@ -110,6 +112,9 @@ impl Ppu {
 
         let scanline = self.mode.get_line();
         if old_line != scanline {
+            if scanline == 0 {
+                self.window_line = 0;
+            }
             let lyc = self.read_lcd_reg(LYC);
             stat.set_bit(STAT_LY_EQ_LYC_BIT, scanline == lyc);
             irq = (scanline == lyc) && stat.get_bit(STAT_LY_LYC_IRQ_BIT);
@@ -193,6 +198,9 @@ impl Ppu {
     }
 
     pub fn write_lcd_reg(&mut self, addr: u16, val: u8) {
+        if addr == LCDC && !val.get_bit(LCDC_LCD_ENABLED_BIT) {
+            self.window_line = 0;
+        }
         let relative_addr = addr - LCD_REG_START;
         self.lcd_regs[relative_addr as usize] = val;
     }
@@ -215,10 +223,14 @@ impl Ppu {
         if lcdc.get_bit(LCDC_WNDW_MAP_BIT) { 1 } else { 0 }
     }
 
-    // bit 5 and bit 0 toggle bg and wndw layers. bit 0 takes priority
+    // bit 5 toggles window layer. In DMG mode, bit 0 must also be enabled.
     fn is_window_layer_displayed(&self) -> bool {
         let lcdc = self.read_lcd_reg(LCDC);
-        lcdc.get_bit(LCDC_WNDW_ENABLED_BIT) && lcdc.get_bit(LCDC_BG_WNDW_ENABLED_BIT)
+        if self.is_cgb {
+            lcdc.get_bit(LCDC_WNDW_ENABLED_BIT)
+        } else {
+            lcdc.get_bit(LCDC_WNDW_ENABLED_BIT) && lcdc.get_bit(LCDC_BG_WNDW_ENABLED_BIT)
+        }
     }
 
     fn get_bg_wndw_tile_set_index(&self) -> u8 {
@@ -250,12 +262,6 @@ impl Ppu {
         let x = self.read_lcd_reg(SCX);
         let y = self.read_lcd_reg(SCY);
         Point::new(x, y)
-    }
-
-    fn get_window_coords(&self) -> Point {
-        let x = self.read_lcd_reg(WX);
-        let y = self.read_lcd_reg(WY);
-        Point::new(x.saturating_sub(7), y)
     }
 
     fn get_bg_palette(&self) -> [u8; 4] {
@@ -290,7 +296,7 @@ impl Ppu {
             self.render_bg(&mut row, line, bg_palette, &mut bg_color_indices, &mut bg_priorities);
         }
 
-        if self.is_window_layer_displayed() && (self.is_cgb || master_bg_enabled) {
+        if self.is_window_layer_displayed() {
             self.render_window(&mut row, line, bg_palette, &mut bg_color_indices, &mut bg_priorities);
         }
 
@@ -401,11 +407,14 @@ impl Ppu {
         let height = if is_8x16 { 16 } else { 8 };
         let signed_line = line as isize;
 
-        let mut line_sprites = Vec::with_capacity(40);
+        let mut line_sprites = Vec::with_capacity(10);
         for (i, spr) in self.oam.iter().enumerate() {
             let coords = spr.get_coords();
             if signed_line >= coords.1 && signed_line < coords.1 + height {
                 line_sprites.push((i, spr));
+                if line_sprites.len() == 10 {
+                    break;
+                }
             }
         }
 
@@ -491,23 +500,28 @@ impl Ppu {
     }
 
     fn render_window(
-        &self,
+        &mut self,
         buffer: &mut [u8],
         line: u8,
         bg_palette_data: [u8; 64],
         bg_color_indices: &mut [u8; SCREEN_WIDTH],
         bg_priorities: &mut [bool; SCREEN_WIDTH],
     ) {
-        let map_offset = self.get_wndw_tile_map_index() as usize * TILE_MAP_TABLE_SIZE;
-        let palette = self.get_bg_palette();
-        let coords = self.get_window_coords();
-        if (coords.x as usize > SCREEN_WIDTH) || (coords.y > line) {
+        let wy = self.read_lcd_reg(WY);
+        let wx_raw = self.read_lcd_reg(WX);
+        let wx = wx_raw as isize - 7;
+        if line < wy || wx >= SCREEN_WIDTH as isize {
             return;
         }
-        let y = (line - coords.y) as usize; 
+
+        let map_offset = self.get_wndw_tile_map_index() as usize * TILE_MAP_TABLE_SIZE;
+        let palette = self.get_bg_palette();
+        let y = self.window_line as usize;
         let row = y % TILESIZE;
-        for x in (coords.x as usize)..SCREEN_WIDTH {
-            let win_x = x - coords.x as usize;
+        let start_x = if wx < 0 { 0 } else { wx as usize };
+
+        for px in start_x..SCREEN_WIDTH {
+            let win_x = (px as isize - wx) as usize;
             let col = win_x % TILESIZE;
             let map_num = (y / TILESIZE) * LAYERSIZE + (win_x / TILESIZE);
             let tile_index = self.maps[map_offset + map_num] as usize;
@@ -540,8 +554,8 @@ impl Ppu {
             let data = tile.get_row(if tile_y_flip { 7 - row as u8 } else { row as u8 });
             let cell = if tile_x_flip { data[7 - col] } else { data[col] };
 
-            bg_color_indices[x] = cell;
-            bg_priorities[x] = tile_priority;
+            bg_color_indices[px] = cell;
+            bg_priorities[px] = tile_priority;
 
             let color = if self.is_cgb {
                 Self::rgb555_to_rgba(bg_palette_data, tile_palette, cell)
@@ -550,11 +564,13 @@ impl Ppu {
                 GB_PALETTE[color_idx as usize]
             };
             
-            let buffer_idx = 4 * x;
+            let buffer_idx = 4 * px;
             for i in 0..4 {
                 buffer[buffer_idx + i] = color[i];
             }
         }
+
+        self.window_line = self.window_line.wrapping_add(1);
     }
 
     // Helper function to convert CGB 15-bit RGB555 to RGBA
