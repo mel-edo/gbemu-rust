@@ -72,6 +72,24 @@ impl GB {
     }
 
     #[wasm_bindgen]
+    pub fn press_btn(&mut self, btn: &str, pressed: bool) {
+        let button = match btn {
+            "a" | "A" => Some(Buttons::A),
+            "b" | "B" => Some(Buttons::B),
+            "start" | "Start" => Some(Buttons::Start),
+            "select" | "Select" => Some(Buttons::Select),
+            "up" | "Up" => Some(Buttons::Up),
+            "down" | "Down" => Some(Buttons::Down),
+            "left" | "Left" => Some(Buttons::Left),
+            "right" | "Right" => Some(Buttons::Right),
+            _ => None,
+        };
+        if let Some(b) = button {
+            self.cpu.press_button(b, pressed);
+        }
+    }
+
+    #[wasm_bindgen]
     pub fn get_title(&self) -> String {
         self.cpu.get_title().to_string()
     }
@@ -119,14 +137,14 @@ impl GB {
 
 fn key2btn(key: &str) -> Option<Buttons> {
     match key {
-        "ArrowDown" => Some(Buttons::Down),
-        "ArrowUp" => Some(Buttons::Up),
-        "ArrowRight" => Some(Buttons::Right),
-        "ArrowLeft" => Some(Buttons::Left),
+        "ArrowDown" | "s" | "S" => Some(Buttons::Down),
+        "ArrowUp" | "w" | "W" => Some(Buttons::Up),
+        "ArrowRight" | "d" | "D" => Some(Buttons::Right),
+        "ArrowLeft" | "a" | "A" => Some(Buttons::Left),
         "Enter" => Some(Buttons::Start),
-        "Backspace" => Some(Buttons::Select),
-        "x" | "X" => Some(Buttons::A),
-        "z" | "Z" => Some(Buttons::B),
+        "Backspace" | "Tab" | " " => Some(Buttons::Select),
+        "x" | "X" | "k" | "K" => Some(Buttons::A),
+        "z" | "Z" | "j" | "J" => Some(Buttons::B),
         _ => None,
     }
 }

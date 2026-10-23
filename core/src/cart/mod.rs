@@ -233,7 +233,7 @@ impl Cart {
             ROM_RAM_MODE_START..=ROM_RAM_MODE_STOP => {
                 self.rom_mode = (val & 0x01) == 0;
             }
-            _ => unreachable!(),
+            _ => {}
         }
     }
 
@@ -269,7 +269,7 @@ impl Cart {
                     self.latch_pending = false;
                 }
             }
-            _ => unreachable!(),
+            _ => {}
         }
     }
 
@@ -351,7 +351,7 @@ impl Cart {
             RAM_BANK_NUM_START..=RAM_BANK_NUM_STOP => {
                 self.ram_bank = val & 0x0F;
             }
-            _ => unreachable!(),
+            _ => {}
         }
     }
 
@@ -360,6 +360,7 @@ impl Cart {
     }
 
     pub fn set_battery_data(&mut self, data: &[u8]) {
-        self.ram.copy_from_slice(data);
+        let len = self.ram.len().min(data.len());
+        self.ram[..len].copy_from_slice(&data[..len]);
     }
 }

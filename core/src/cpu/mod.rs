@@ -521,7 +521,9 @@ impl Cpu {
             self.enable_irq_type(Interrupts::Serial, true);
         }
 
-        self.bus.apu.tick(cycles);
+        if ppu_cycles > 0 {
+            self.bus.apu.tick(ppu_cycles);
+        }
 
         if let Some(irq) = self.check_irq() {
             self.trigger_irq(irq);

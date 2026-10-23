@@ -1,5 +1,6 @@
 use crate::{timer::*, utils::BitOps};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Buttons {
     A = 0,
     B = 1,
