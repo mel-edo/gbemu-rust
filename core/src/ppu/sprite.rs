@@ -52,12 +52,10 @@ impl Sprite {
                 ret.set_bit(BG_PRIORITY_BIT, self.bg_priority);
                 ret.set_bit(Y_FLIP_BIT, self.y_flip);
                 ret.set_bit(X_FLIP_BIT, self.x_flip);
+                ret.set_bit(PALETTE_BIT, self.palette1);
                 if self.is_cgb {
-                    ret.set_bit(PALETTE_BIT, (self.cgb_palette & 0x08) != 0);
                     ret.set_bit(CGB_VRAM_BANK_BIT, self.vram_bank);
                     ret |= self.cgb_palette & CGB_PALETTE_MASK;
-                } else {
-                    ret.set_bit(PALETTE_BIT, self.palette1);
                 }
                 ret
             }
@@ -83,13 +81,10 @@ impl Sprite {
                 self.bg_priority = val.get_bit(BG_PRIORITY_BIT);
                 self.y_flip = val.get_bit(Y_FLIP_BIT);
                 self.x_flip = val.get_bit(X_FLIP_BIT);
+                self.palette1 = val.get_bit(PALETTE_BIT);
                 if self.is_cgb {
                     self.vram_bank = val.get_bit(CGB_VRAM_BANK_BIT);
                     self.cgb_palette = val & CGB_PALETTE_MASK;
-                    // In CGB mode, bit 4 is part of palette index
-                    self.palette1 = (val & 0x10) != 0;
-                } else {
-                    self.palette1 = val.get_bit(PALETTE_BIT);
                 }
             }
             _ => {
@@ -129,10 +124,6 @@ impl Sprite {
     }
 
     pub fn get_cgb_palette(&self) -> u8 {
-        if self.is_cgb {
-            self.cgb_palette | (if self.palette1 { 0x08 } else { 0 })
-        } else {
-            if self.palette1 { 1 } else { 0 }
-        }
+        self.cgb_palette & CGB_PALETTE_MASK
     }
 }

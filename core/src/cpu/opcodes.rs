@@ -1911,7 +1911,9 @@ fn ei_fb(cpu: &mut Cpu) -> u8 {
 }
 
 // STOP ----
-fn stop_10(_cpu: &mut Cpu) -> u8 {
+fn stop_10(cpu: &mut Cpu) -> u8 {
+    let _ = cpu.fetch(); // STOP is a 2-byte instruction (0x10 0x00)
+    cpu.bus.handle_stop();
     1
 }
 

@@ -21,6 +21,7 @@ pub struct Cpu {
     last_read: Option<u16>,
     last_write: Option<u16>,
     dirty_battery: bool,
+    ppu_cycle_accum: u8,
 }
 
 impl Cpu {
@@ -45,6 +46,7 @@ impl Cpu {
             last_read: None,
             last_write: None,
             dirty_battery: false,
+            ppu_cycle_accum: 0,
         };
 
         // The RAM is initialized to these values after boot
@@ -477,19 +479,33 @@ impl Cpu {
             opcodes::execute(self)
         };
         self.bus.update_dma(cycles);
-        let ppu_result = self.bus.update_ppu(cycles);
-        if ppu_result.irq {
-            self.enable_irq_type(Interrupts::Stat, true);
-        }
-        match ppu_result.lcd_result {
-            LcdResults::RenderLine => {
-                self.bus.render_scanline();
+
+        // In CGB double speed mode, CPU cycles run at 2x dot clock (2 CPU M-cycles = 1 PPU M-cycle).
+        // PPU runs on real-time dot clocks (4.19 MHz).
+        let ppu_cycles = if self.bus.cgb_speed() {
+            self.ppu_cycle_accum += cycles;
+            let p_cycles = self.ppu_cycle_accum / 2;
+            self.ppu_cycle_accum %= 2;
+            p_cycles
+        } else {
+            cycles
+        };
+
+        if ppu_cycles > 0 {
+            let ppu_result = self.bus.update_ppu(ppu_cycles);
+            if ppu_result.irq {
+                self.enable_irq_type(Interrupts::Stat, true);
             }
-            LcdResults::RenderFrame => {
-                self.enable_irq_type(Interrupts::Vblank, true);
-                draw_time = true;
+            match ppu_result.lcd_result {
+                LcdResults::RenderLine => {
+                    self.bus.render_scanline();
+                }
+                LcdResults::RenderFrame => {
+                    self.enable_irq_type(Interrupts::Vblank, true);
+                    draw_time = true;
+                }
+                _ => {}
             }
-            _ => {}
         }
 
         let timer_irq = self.bus.update_timer(cycles);

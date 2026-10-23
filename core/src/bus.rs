@@ -41,7 +41,6 @@ pub struct Bus {
     hdma_src: u16,
     hdma_dst: u16,
     hdma_len: u8,
-    hdma_mode_gdma: bool,
     // CGB Palettes (64 bytes each for BG and OBJ = 8 palettes * 4 colors * 2 bytes)
     bg_palette: [u8; 64],
     obj_palette: [u8; 64],
@@ -69,7 +68,6 @@ impl Bus {
             hdma_src: 0,
             hdma_dst: 0,
             hdma_len: 0,
-            hdma_mode_gdma: false,
             bg_palette: [0; 64],
             obj_palette: [0; 64],
             bcps: 0,
@@ -155,20 +153,14 @@ impl Bus {
             HDMA1..=HDMA5 => {
                 if self.is_cgb {
                     match addr {
-                        HDMA1 => (self.hdma_src >> 8) as u8,
-                        HDMA2 => (self.hdma_src & 0xFF) as u8,
-                        HDMA3 => (self.hdma_dst >> 8) as u8,
-                        HDMA4 => (self.hdma_dst & 0xFF) as u8,
                         HDMA5 => {
-                            if self.hdma_active || self.hdma_mode_gdma {
-                                let mut val = self.hdma_len;
-                                if self.hdma_mode_gdma { val |= 0x80; }
-                                val
+                            if self.hdma_active {
+                                self.hdma_len & 0x7F
                             } else {
-                                0xFF // HDMA not active
+                                0xFF // Bit 7=1 indicates HDMA is inactive
                             }
                         },
-                        _ => 0xFF,
+                        _ => 0xFF, // HDMA1-4 are write-only registers
                     }
                 } else {
                     0xFF
@@ -203,7 +195,7 @@ impl Bus {
                 self.wram.read_svbk()
             },
             _ => {
-                0
+                0xFF
             }
         }
     }
@@ -248,9 +240,9 @@ impl Bus {
                 self.ppu.write_vbk(val);
             },
             KEY1 => {
-                if self.is_cgb && !self.cgb_speed && (val & 0x01) != 0 {
-                    // Request speed switch (only from normal to double)
-                    self.speed_switch_pending = true;
+                if self.is_cgb {
+                    // Arm or disarm speed switch
+                    self.speed_switch_pending = (val & 0x01) != 0;
                 }
             },
             HDMA1 => {
@@ -265,23 +257,30 @@ impl Bus {
             },
             HDMA3 => {
                 if self.is_cgb {
-                    self.hdma_dst = (self.hdma_dst & 0x00FF) | ((val as u16) << 8);
-                    self.hdma_dst &= 0x1FF0; // Destination must be in VRAM (0x8000-0x9FF0)
+                    self.hdma_dst = (self.hdma_dst & 0x00FF) | (((val & 0x1F) as u16) << 8);
                 }
             },
             HDMA4 => {
                 if self.is_cgb {
                     self.hdma_dst = (self.hdma_dst & 0xFF00) | (val as u16 & 0xF0);
-                    self.hdma_dst &= 0x1FF0;
                 }
             },
             HDMA5 => {
                 if self.is_cgb {
-                    self.hdma_len = val & 0x7F;
-                    self.hdma_mode_gdma = (val & 0x80) == 0;
-                    if self.hdma_mode_gdma {
-                        self.execute_gdma();
+                    if (val & 0x80) == 0 {
+                        // Bit 7 = 0
+                        if self.hdma_active {
+                            // Writing 0 to bit 7 while an HDMA is active cancels it
+                            self.hdma_active = false;
+                            self.hdma_len |= 0x80;
+                        } else {
+                            // Start General Purpose DMA (GDMA)
+                            self.hdma_len = val & 0x7F;
+                            self.execute_gdma();
+                        }
                     } else {
+                        // Bit 7 = 1: Start HBlank DMA (HDMA)
+                        self.hdma_len = val & 0x7F;
                         self.hdma_active = true;
                     }
                 }
@@ -356,6 +355,18 @@ impl Bus {
         let bg_palette = self.bg_palette;
         let obj_palette = self.obj_palette;
         self.ppu.render_scanline(bg_palette, obj_palette);
+
+        // HDMA transfers 1 block (16 bytes) during HBlank
+        if self.is_cgb && self.hdma_active {
+            self.execute_hdma_block();
+        }
+    }
+
+    pub fn handle_stop(&mut self) {
+        if self.is_cgb && self.speed_switch_pending {
+            self.cgb_speed = !self.cgb_speed;
+            self.speed_switch_pending = false;
+        }
     }
 
     fn start_dma(&mut self, val: u8) {
@@ -365,12 +376,6 @@ impl Bus {
     }
 
     pub fn update_dma(&mut self, cycles: u8) {
-        // Handle speed switch
-        if self.speed_switch_pending {
-            self.cgb_speed = true;
-            self.speed_switch_pending = false;
-        }
-
         // Handle OAM DMA
         for _ in 0..cycles {
             if !self.dma_active {
@@ -388,51 +393,45 @@ impl Bus {
                 self.dma_active = false;
             }
         }
-
-        // Handle HDMA (during HBlank)
-        if self.hdma_active {
-            self.execute_hdma();
-        }
     }
 
     fn execute_gdma(&mut self) {
         let blocks = (self.hdma_len as usize) + 1;
         let total_bytes = blocks * HDMA_BLOCK_SIZE;
-        
+        let base_src = self.hdma_src & 0xFFF0;
+        let base_dst = 0x8000 | (self.hdma_dst & 0x1FF0);
+
         for i in 0..total_bytes {
-            let src = self.hdma_src + i as u16;
-            let dst = self.hdma_dst + i as u16;
+            let src = base_src.wrapping_add(i as u16);
+            let dst = base_dst.wrapping_add(i as u16);
             let value = self.read_dma_source(src);
             self.ppu.write_vram(dst, value);
         }
-        
-        self.hdma_src = self.hdma_src.wrapping_add(total_bytes as u16);
-        self.hdma_dst = self.hdma_dst.wrapping_add(total_bytes as u16);
+
+        self.hdma_src = base_src.wrapping_add(total_bytes as u16);
+        self.hdma_dst = (base_dst.wrapping_add(total_bytes as u16)) & 0x1FF0;
         self.hdma_len = 0xFF; // HDMA5 reads as 0xFF after GDMA
     }
 
-    fn execute_hdma(&mut self) {
-        if self.hdma_len == 0xFF {
-            self.hdma_active = false;
-            return;
-        }
+    fn execute_hdma_block(&mut self) {
+        let base_src = self.hdma_src & 0xFFF0;
+        let base_dst = 0x8000 | (self.hdma_dst & 0x1FF0);
 
-        let blocks = 1; // HDMA transfers 1 block per HBlank
-        let total_bytes = blocks * HDMA_BLOCK_SIZE;
-        
-        for i in 0..total_bytes {
-            let src = self.hdma_src + i as u16;
-            let dst = self.hdma_dst + i as u16;
+        for i in 0..HDMA_BLOCK_SIZE {
+            let src = base_src.wrapping_add(i as u16);
+            let dst = base_dst.wrapping_add(i as u16);
             let value = self.read_dma_source(src);
             self.ppu.write_vram(dst, value);
         }
-        
-        self.hdma_src = self.hdma_src.wrapping_add(total_bytes as u16);
-        self.hdma_dst = self.hdma_dst.wrapping_add(total_bytes as u16);
-        self.hdma_len = self.hdma_len.wrapping_sub(blocks as u8);
-        
-        if self.hdma_len == 0xFF {
+
+        self.hdma_src = base_src.wrapping_add(HDMA_BLOCK_SIZE as u16);
+        self.hdma_dst = (base_dst.wrapping_add(HDMA_BLOCK_SIZE as u16)) & 0x1FF0;
+
+        if self.hdma_len == 0 {
             self.hdma_active = false;
+            self.hdma_len = 0xFF;
+        } else {
+            self.hdma_len -= 1;
         }
     }
 
