@@ -49,6 +49,10 @@ pub struct Bus {
 }
 
 impl Bus {
+    pub fn rom_bank(&self) -> u16 {
+        self.rom.rom_bank()
+    }
+
     pub fn new() -> Self {
         Self {
             rom: Cart::new(),

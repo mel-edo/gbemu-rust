@@ -1,7 +1,7 @@
 use gb_core::cpu::Cpu;
-use gb_core::utils::{SCREEN_HEIGHT, SCREEN_WIDTH};
 use gb_core::io::Buttons;
-use js_sys::{Uint8Array, Float32Array};
+use gb_core::utils::{SCREEN_HEIGHT, SCREEN_WIDTH};
+use js_sys::{Float32Array, Uint8Array};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::Clamped;
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, ImageData, KeyboardEvent};
@@ -20,11 +20,13 @@ impl GB {
 
         let document = web_sys::window().unwrap().document().unwrap();
         let canvas = document.get_element_by_id("canvas").unwrap();
-        let canvas: HtmlCanvasElement = canvas.dyn_into::<HtmlCanvasElement>()
+        let canvas: HtmlCanvasElement = canvas
+            .dyn_into::<HtmlCanvasElement>()
             .map_err(|_| ())
             .unwrap();
 
-        let ctx = canvas.get_context("2d")
+        let ctx = canvas
+            .get_context("2d")
             .unwrap()
             .unwrap()
             .dyn_into::<CanvasRenderingContext2d>()
@@ -52,7 +54,12 @@ impl GB {
     #[wasm_bindgen]
     pub fn draw_screen(&mut self) {
         let mut framebuffer = self.cpu.render();
-        let img_data = ImageData::new_with_u8_clamped_array_and_sh(Clamped(&mut framebuffer), SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32).unwrap();
+        let img_data = ImageData::new_with_u8_clamped_array_and_sh(
+            Clamped(&mut framebuffer),
+            SCREEN_WIDTH as u32,
+            SCREEN_HEIGHT as u32,
+        )
+        .unwrap();
         self.ctx.put_image_data(&img_data, 0.0, 0.0).unwrap();
     }
 
@@ -77,18 +84,49 @@ impl GB {
         self.cpu.bus.apu.audio_buffer.clear();
         copied_array
     }
+
+    #[wasm_bindgen]
+    pub fn has_battery(&self) -> bool {
+        self.cpu.bus.has_battery()
+    }
+
+    #[wasm_bindgen]
+    pub fn is_battery_dirty(&self) -> bool {
+        self.cpu.is_battery_dirty()
+    }
+
+    #[wasm_bindgen]
+    pub fn clean_battery(&mut self) {
+        self.cpu.clean_battery();
+    }
+
+    #[wasm_bindgen]
+    pub fn get_save_data(&self) -> Uint8Array {
+        let data = self.cpu.get_battery_data();
+        let js_array = unsafe { Uint8Array::view(data) };
+        Uint8Array::new(&js_array)
+    }
+
+    #[wasm_bindgen]
+    pub fn load_save_data(&mut self, data: Uint8Array) {
+        let mut save = Vec::new();
+        for i in 0..data.byte_length() {
+            save.push(data.get_index(i));
+        }
+        self.cpu.set_battery_data(&save);
+    }
 }
 
 fn key2btn(key: &str) -> Option<Buttons> {
     match key {
-        "ArrowDown" => { Some(Buttons::Down) },
-        "ArrowUp" => { Some(Buttons::Up) },
-        "ArrowRight" => { Some(Buttons::Right) },
-        "ArrowLeft" => { Some(Buttons::Left) },
-        "Enter" => { Some(Buttons::Start) },
-        "Backspace" => { Some(Buttons::Select) },
-        "x" | "X" => { Some(Buttons::A) },
-        "z" | "Z" => { Some(Buttons::B) },
-        _ => { None },
+        "ArrowDown" => Some(Buttons::Down),
+        "ArrowUp" => Some(Buttons::Up),
+        "ArrowRight" => Some(Buttons::Right),
+        "ArrowLeft" => Some(Buttons::Left),
+        "Enter" => Some(Buttons::Start),
+        "Backspace" => Some(Buttons::Select),
+        "x" | "X" => Some(Buttons::A),
+        "z" | "Z" => Some(Buttons::B),
+        _ => None,
     }
 }

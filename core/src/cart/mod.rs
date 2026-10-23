@@ -58,6 +58,10 @@ pub struct Cart {
 }
 
 impl Cart {
+    pub fn rom_bank(&self) -> u16 {
+        self.rom_bank
+    }
+
     pub fn new() -> Self {
         Self {
             rom: Vec::new(),

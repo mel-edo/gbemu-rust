@@ -78,11 +78,12 @@ pub struct Ppu {
     vbk: u8,
     is_cgb: bool,
     window_line: u8,
+    disabled_cycles: usize,
 }
 
 impl Ppu {
     pub fn new() -> Self {
-        Self {
+        let mut ppu = Self {
             screen_buffer: [0; DISPLAY_BUFFER],
             mode: Lcd::new(),
             tiles: [Tile::new(); NUM_TILES * 2],
@@ -92,7 +93,14 @@ impl Ppu {
             vbk: 0,
             is_cgb: false,
             window_line: 0,
-        }
+            disabled_cycles: 0,
+        };
+        ppu.lcd_regs[(LCDC - LCD_REG_START) as usize] = 0x91;
+        ppu.lcd_regs[(BGP - LCD_REG_START) as usize] = 0xFC;
+        ppu.lcd_regs[(OBP0 - LCD_REG_START) as usize] = 0xFF;
+        ppu.lcd_regs[(OBP1 - LCD_REG_START) as usize] = 0xFF;
+        ppu.mode.turn_on();
+        ppu
     }
 
     pub fn set_cgb(&mut self, is_cgb: bool) {
@@ -103,6 +111,19 @@ impl Ppu {
     }
 
     pub fn update(&mut self, m_cycles: u8) -> PpuUpdateResult {
+        if !self.is_lcd_enabled() {
+            self.disabled_cycles += m_cycles as usize * 4;
+            let mut lcd_result = LcdResults::NoAction;
+            if self.disabled_cycles >= 70224 {
+                self.disabled_cycles -= 70224;
+                lcd_result = LcdResults::RenderFrameDisabled;
+            }
+            return PpuUpdateResult {
+                lcd_result,
+                irq: false,
+            };
+        }
+
         let t_cycles = m_cycles * 4;
         let old_mode = self.mode.get_mode();
         let old_line = self.mode.get_line();
@@ -118,7 +139,7 @@ impl Ppu {
             let lyc = self.read_lcd_reg(LYC);
             stat.set_bit(STAT_LY_EQ_LYC_BIT, scanline == lyc);
             irq = (scanline == lyc) && stat.get_bit(STAT_LY_LYC_IRQ_BIT);
-            self.write_lcd_reg(LY, scanline);
+            self.lcd_regs[(LY - LCD_REG_START) as usize] = scanline;
         }
 
         let mode = self.mode.get_mode();
@@ -139,7 +160,7 @@ impl Ppu {
 
         stat &= 0b1111_1100;  // first 2 bits of stat register tell use the ppu mode
         stat |= mode.get_idx();
-        self.write_lcd_reg(STAT, stat);
+        self.lcd_regs[(STAT - LCD_REG_START) as usize] = stat;
 
         PpuUpdateResult { lcd_result, irq }
     }
@@ -194,15 +215,49 @@ impl Ppu {
 
     pub fn read_lcd_reg(&self, addr: u16) -> u8 {
         let relative_addr = addr - LCD_REG_START;
-        self.lcd_regs[relative_addr as usize]
+        let val = self.lcd_regs[relative_addr as usize];
+        if addr == STAT {
+            val | 0x80
+        } else {
+            val
+        }
     }
 
     pub fn write_lcd_reg(&mut self, addr: u16, val: u8) {
-        if addr == LCDC && !val.get_bit(LCDC_LCD_ENABLED_BIT) {
-            self.window_line = 0;
+        if addr == LCDC {
+            let was_enabled = self.is_lcd_enabled();
+            let now_enabled = val.get_bit(LCDC_LCD_ENABLED_BIT);
+            if was_enabled && !now_enabled {
+                self.window_line = 0;
+                self.mode.reset();
+                self.disabled_cycles = 0;
+                self.lcd_regs[(LY - LCD_REG_START) as usize] = 0;
+                let mut stat = self.lcd_regs[(STAT - LCD_REG_START) as usize];
+                stat &= 0b1111_1100; // Mode 0
+                let lyc = self.read_lcd_reg(LYC);
+                stat.set_bit(STAT_LY_EQ_LYC_BIT, lyc == 0);
+                self.lcd_regs[(STAT - LCD_REG_START) as usize] = stat;
+            } else if !was_enabled && now_enabled {
+                self.window_line = 0;
+                self.mode.turn_on();
+                self.disabled_cycles = 0;
+                self.lcd_regs[(LY - LCD_REG_START) as usize] = 0;
+                let mut stat = self.lcd_regs[(STAT - LCD_REG_START) as usize];
+                stat &= 0b1111_1100;
+                stat |= self.mode.get_mode().get_idx();
+                let lyc = self.read_lcd_reg(LYC);
+                stat.set_bit(STAT_LY_EQ_LYC_BIT, lyc == 0);
+                self.lcd_regs[(STAT - LCD_REG_START) as usize] = stat;
+            }
         }
         let relative_addr = addr - LCD_REG_START;
-        self.lcd_regs[relative_addr as usize] = val;
+        let final_val = if addr == STAT {
+            let old_stat = self.lcd_regs[relative_addr as usize];
+            (val & 0b1111_1000) | (old_stat & 0b0000_0111)
+        } else {
+            val
+        };
+        self.lcd_regs[relative_addr as usize] = final_val;
     }
 
     pub fn read_vbk(&self) -> u8 {

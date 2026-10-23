@@ -504,6 +504,9 @@ impl Cpu {
                     self.enable_irq_type(Interrupts::Vblank, true);
                     draw_time = true;
                 }
+                LcdResults::RenderFrameDisabled => {
+                    draw_time = true;
+                }
                 _ => {}
             }
         }

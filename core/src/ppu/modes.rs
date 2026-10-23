@@ -12,6 +12,7 @@ pub enum LcdResults {
     NoAction,
     RenderLine,
     RenderFrame,
+    RenderFrameDisabled,
 }
 
 impl Lcd {
@@ -95,6 +96,18 @@ impl Lcd {
             cycles: 0,
             line: 0,
         }
+    }
+
+    pub fn reset(&mut self) {
+        self.mode = LcdModeType::HBLANK;
+        self.cycles = 0;
+        self.line = 0;
+    }
+
+    pub fn turn_on(&mut self) {
+        self.mode = LcdModeType::OAMReadMode;
+        self.cycles = 0;
+        self.line = 0;
     }
 
     pub fn get_line(&self) -> u8 {
