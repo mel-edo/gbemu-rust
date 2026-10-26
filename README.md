@@ -2,7 +2,7 @@
 
 A complete, cycle-accurate Game Boy (DMG) and Game Boy Color (CGB) emulator written from scratch in Rust.
 
-> **Play it in your browser:** The WebAssembly build of this emulator is hosted live on **[moonweft](https://mel-edo.github.io/moonweft/emulator.html)**!
+> **Play it in your browser:** The WebAssembly build of this emulator is hosted live on my website **[moonweft](https://mel-edo.github.io/moonweft/emulator.html)**!
 
 <p align="center">
   <img src="assets/gbemu_demo.webp" alt="gbemu demo" width="650">
@@ -15,7 +15,8 @@ A complete, cycle-accurate Game Boy (DMG) and Game Boy Color (CGB) emulator writ
 - **CPU (Sharp LR35902)**: Complete instruction set with cycle-accurate timing, interrupts, and CGB double-speed mode.
 - **PPU**: Cycle-accurate scanline timing, DMG & CGB palettes, 2-bank VRAM, sprites, window, and CGB DMA (GDMA/HDMA).
 - **APU**: 4-channel stereo sound synthesis (two pulse channels, custom wave, noise generator) with frequency sweep and volume envelopes.
-- **Cartridges & MBCs**: ROM-only, MBC1, MBC2, MBC3 (with RTC), and MBC5 support with battery-backed save persistence.
+- **Cartridges & MBCs**: ROM-only, MBC1, MBC2, MBC3 (with RTC), and MBC5 support.
+- **Save Support**: Automatic battery-backed SRAM save persistence (`.sav` files on desktop, `localStorage` in the browser).
 - **Timers**: Accurate divider and timer counters (`DIV`, `TIMA`, `TMA`, `TAC`) with hardware overflow edge-case modeling.
 - **Accuracy & Testing**: Passes Blargg test suites (`cpu_instrs`, `instr_timing`, `mem_timing`, `dmg_sound`), Mooneye acceptance tests, and Acid2 visual tests (`dmg-acid2`, `cgb-acid2`).
 
@@ -41,24 +42,9 @@ A complete, cycle-accurate Game Boy (DMG) and Game Boy Color (CGB) emulator writ
 | **D-Pad** | Arrow Keys | `W`, `A`, `S`, `D` |
 | **A** | `X` | `K` |
 | **B** | `Z` | `J` |
-| **Start** | `Enter` | — |
+| **Start** | `Enter` | - |
 | **Select** | `Backspace` | `Tab`, `Space` |
-| **Fast Forward** | `Shift` (Hold) | — |
-
----
-
-## Architecture
-
-The project is structured as a modular workspace:
-
-```text
-gbemu/
-├── core/       # Pure emulation engine: CPU, Bus, PPU, APU, Timers, Cartridges & MBCs
-├── desktop/    # Native desktop frontend (SDL2 video rendering, audio queues, and input)
-├── wasm/       # WebAssembly bridge bindings (wasm-bindgen)
-├── html/       # Standalone HTML/JS frontend using the compiled WebAssembly package
-└── tests/      # Automated test runner with headless visual verification and Blargg/Mooneye support
-```
+| **Fast Forward** | `Shift` (Hold) | - |
 
 ---
 
@@ -116,11 +102,11 @@ cargo run --release -- roms/blargg/gb-test-roms/cpu_instrs/cpu_instrs.gb
 
 ## Helpful Resources
 
-- [Pan Docs](https://gbdev.io/pandocs/) — Comprehensive Game Boy technical reference.
-- [The Ultimate Game Boy Talk](https://www.youtube.com/watch?v=HyzD8pNlpwI) — In-depth architectural breakdown by Michael Steil.
-- [Game Boy Emulator Development Guide](https://github.com/aquova/gb-book) — Practical guide to writing a Game Boy emulator in Rust.
-- [Understanding the Z80 DAA Instruction](https://ehaskins.com/2018-01-30%20Z80%20DAA/) — Detailed breakdown of DAA logic and edge cases.
-- [Homebrew titles for testing](https://opusgames.com/games/GBDev/GBDev.html) — Curated collection of test homebrew titles.
+- [Pan Docs](https://gbdev.io/pandocs/) - Comprehensive Game Boy technical reference.
+- [The Ultimate Game Boy Talk](https://www.youtube.com/watch?v=HyzD8pNlpwI) - In-depth architectural breakdown by Michael Steil.
+- [Game Boy Emulator Development Guide](https://github.com/aquova/gb-book) - Practical guide to writing a Game Boy emulator in Rust.
+- [Understanding the Z80 DAA Instruction](https://ehaskins.com/2018-01-30%20Z80%20DAA/) - Detailed breakdown of DAA logic and edge cases.
+- [Homebrew titles for testing](https://opusgames.com/games/GBDev/GBDev.html) - Curated collection of test homebrew titles.
 
 ---
 
