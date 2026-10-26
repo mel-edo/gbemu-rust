@@ -4,6 +4,10 @@ A complete, cycle-accurate Game Boy (DMG) and Game Boy Color (CGB) emulator writ
 
 > **Play it in your browser:** The WebAssembly build of this emulator is hosted live on **[moonweft](https://mel-edo.github.io/moonweft/emulator.html)**!
 
+<p align="center">
+  <img src="assets/gbemu_demo.webp" alt="gbemu demo" width="650">
+</p>
+
 ---
 
 ## Features
