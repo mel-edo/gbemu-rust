@@ -31,7 +31,6 @@ fn run_test(path: &Path) -> bool {
     let mut cycles = 0u64;
     let mut frames = 0u64;
     let mut output = Vec::new();
-    let mut last_halt = false;
     let mut consecutive_halts = 0;
 
     while cycles < MAX_CYCLES {
@@ -48,7 +47,7 @@ fn run_test(path: &Path) -> bool {
         // Track HALT state for visual tests
         if halted {
             consecutive_halts += 1;
-            if !last_halt && consecutive_halts > 1000 {
+            if consecutive_halts > 1000 {
                 // CPU has been halted for a while - likely a visual test
                 println!("Visual test detected (HALT at PC={:04X}), checking screen...", pc);
                 return check_visual_test(&cpu, path);
@@ -56,7 +55,6 @@ fn run_test(path: &Path) -> bool {
         } else {
             consecutive_halts = 0;
         }
-        last_halt = halted;
 
         // Blargg-style test protocol (LD B,B with Fibonacci registers)
         if opcode == 0x40 {
@@ -64,7 +62,13 @@ fn run_test(path: &Path) -> bool {
                 return true;
             }
             if (b, c, d, e, h, l) == (0x42, 0x42, 0x42, 0x42, 0x42, 0x42) {
+                println!("  Mooneye failure at PC={:04X} (B={:02X} C={:02X} D={:02X} E={:02X} H={:02X} L={:02X})", pc, b, c, d, e, h, l);
                 return false;
+            }
+            // Acid2 / visual test breakpoint: LD B,B with B == 0 after test completes
+            if b == 0 && frames >= 10 {
+                println!("Visual test breakpoint (LD B,B after {frames} frames), checking screen...");
+                return check_visual_test(&cpu, path);
             }
         }
 
@@ -83,6 +87,39 @@ fn run_test(path: &Path) -> bool {
             println!("\n--- {} ---", path.display());
             println!("{}", String::from_utf8_lossy(&output));
             return false;
+        }
+
+        // Blargg memory output protocol:
+        // $A001..$A003 are written with signature: 0xDE, 0xB0, 0x61
+        // $A000 holds overall status: 0x80 while running; 0x00 when passed; >0 when failed.
+        // $A004 holds the zero-terminated output string.
+        let sig = [
+            cpu.read_ram(0xA001),
+            cpu.read_ram(0xA002),
+            cpu.read_ram(0xA003),
+        ];
+        if sig == [0xDE, 0xB0, 0x61] {
+            let status = cpu.read_ram(0xA000);
+            if status != 0x80 {
+                let mut text = Vec::new();
+                let mut addr = 0xA004;
+                while addr < 0xC000 {
+                    let b = cpu.read_ram(addr);
+                    if b == 0 {
+                        break;
+                    }
+                    text.push(b);
+                    addr += 1;
+                }
+                let msg = String::from_utf8_lossy(&text);
+                if status == 0x00 {
+                    return true;
+                } else {
+                    println!("\n--- {} (status: {status}) ---", path.display());
+                    println!("{msg}");
+                    return false;
+                }
+            }
         }
 
         // Frame-based timeout for visual tests
