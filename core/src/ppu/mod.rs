@@ -79,6 +79,8 @@ pub struct Ppu {
     is_cgb: bool,
     window_line: u8,
     disabled_cycles: usize,
+    stat_irq_line: bool,
+    stat_irq_pending: bool,
 }
 
 impl Ppu {
@@ -94,6 +96,8 @@ impl Ppu {
             is_cgb: false,
             window_line: 0,
             disabled_cycles: 0,
+            stat_irq_line: false,
+            stat_irq_pending: false,
         };
         ppu.lcd_regs[(LCDC - LCD_REG_START) as usize] = 0x91;
         ppu.lcd_regs[(BGP - LCD_REG_START) as usize] = 0xFC;
@@ -125,42 +129,29 @@ impl Ppu {
         }
 
         let t_cycles = m_cycles * 4;
-        let old_mode = self.mode.get_mode();
         let old_line = self.mode.get_line();
         let lcd_result = self.mode.step(t_cycles);
         let mut stat = self.read_lcd_reg(STAT);
-        let mut irq = false;
 
         let scanline = self.mode.get_line();
         if old_line != scanline {
             if scanline == 0 {
                 self.window_line = 0;
             }
+            self.lcd_regs[(LY - LCD_REG_START) as usize] = scanline;
             let lyc = self.read_lcd_reg(LYC);
             stat.set_bit(STAT_LY_EQ_LYC_BIT, scanline == lyc);
-            irq = (scanline == lyc) && stat.get_bit(STAT_LY_LYC_IRQ_BIT);
-            self.lcd_regs[(LY - LCD_REG_START) as usize] = scanline;
         }
 
         let mode = self.mode.get_mode();
-        if old_mode != mode {
-            match mode {
-                LcdModeType::HBLANK => {
-                    irq |= stat.get_bit(STAT_HBLANK_IRQ_BIT);
-                },
-                LcdModeType::VBLANK => {
-                    irq |= stat.get_bit(STAT_VBLANK_IRQ_BIT);
-                },
-                LcdModeType::OAMReadMode => {
-                    irq |= stat.get_bit(STAT_OAM_IRQ_BIT);
-                },
-                _ => {},
-            }
-        }
-
-        stat &= 0b1111_1100;  // first 2 bits of stat register tell use the ppu mode
+        stat &= 0b1111_1100;
         stat |= mode.get_idx();
         self.lcd_regs[(STAT - LCD_REG_START) as usize] = stat;
+
+        let new_stat_line = self.compute_stat_irq_line();
+        let irq = (!self.stat_irq_line && new_stat_line) || self.stat_irq_pending;
+        self.stat_irq_pending = false;
+        self.stat_irq_line = new_stat_line;
 
         PpuUpdateResult { lcd_result, irq }
     }
@@ -215,8 +206,13 @@ impl Ppu {
 
     pub fn read_lcd_reg(&self, addr: u16) -> u8 {
         let relative_addr = addr - LCD_REG_START;
-        let val = self.lcd_regs[relative_addr as usize];
+        let mut val = self.lcd_regs[relative_addr as usize];
         if addr == STAT {
+            if self.is_lcd_enabled() {
+                let ly = self.lcd_regs[(LY - LCD_REG_START) as usize];
+                let lyc = self.lcd_regs[(LYC - LCD_REG_START) as usize];
+                val.set_bit(STAT_LY_EQ_LYC_BIT, ly == lyc);
+            }
             val | 0x80
         } else {
             val
@@ -258,6 +254,38 @@ impl Ppu {
             val
         };
         self.lcd_regs[relative_addr as usize] = final_val;
+
+        if addr == LYC || addr == STAT {
+            let ly = self.lcd_regs[(LY - LCD_REG_START) as usize];
+            let lyc = self.lcd_regs[(LYC - LCD_REG_START) as usize];
+            self.lcd_regs[(STAT - LCD_REG_START) as usize].set_bit(STAT_LY_EQ_LYC_BIT, ly == lyc);
+        }
+        self.update_stat_line_on_write();
+    }
+
+    fn compute_stat_irq_line(&self) -> bool {
+        if !self.is_lcd_enabled() {
+            return false;
+        }
+        let stat = self.lcd_regs[(STAT - LCD_REG_START) as usize];
+        let ly = self.lcd_regs[(LY - LCD_REG_START) as usize];
+        let lyc = self.read_lcd_reg(LYC);
+        let mode = self.mode.get_mode();
+
+        let lyc_match = (ly == lyc) && stat.get_bit(STAT_LY_LYC_IRQ_BIT);
+        let mode2 = (mode == LcdModeType::OAMReadMode) && stat.get_bit(STAT_OAM_IRQ_BIT);
+        let mode1 = (mode == LcdModeType::VBLANK) && stat.get_bit(STAT_VBLANK_IRQ_BIT);
+        let mode0 = (mode == LcdModeType::HBLANK) && stat.get_bit(STAT_HBLANK_IRQ_BIT);
+
+        lyc_match || mode2 || mode1 || mode0
+    }
+
+    fn update_stat_line_on_write(&mut self) {
+        let new_line = self.compute_stat_irq_line();
+        if !self.stat_irq_line && new_line {
+            self.stat_irq_pending = true;
+        }
+        self.stat_irq_line = new_line;
     }
 
     pub fn read_vbk(&self) -> u8 {
