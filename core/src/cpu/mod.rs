@@ -17,11 +17,14 @@ pub struct Cpu {
     l: u8,
     irq_enabled: bool,
     halted: bool,
+    ei_delay: u8,
+    halt_bug: bool,
     pub bus: Bus,
     last_read: Option<u16>,
     last_write: Option<u16>,
     dirty_battery: bool,
     ppu_cycle_accum: u8,
+    pub last_opcode: u8,
 }
 
 impl Cpu {
@@ -42,11 +45,14 @@ impl Cpu {
             l: 0x4D,
             irq_enabled: false,
             halted: false,
+            ei_delay: 0,
+            halt_bug: false,
             bus: Bus::new(),
             last_read: None,
             last_write: None,
             dirty_battery: false,
             ppu_cycle_accum: 0,
+            last_opcode: 0,
         };
 
         // The RAM is initialized to these values after boot
@@ -101,7 +107,7 @@ impl Cpu {
             self.e,
             self.h,
             self.l,
-            self.read_ram(self.pc.wrapping_sub(1)),
+            self.last_opcode,
         )
     }
 
@@ -195,7 +201,11 @@ impl Cpu {
 
     pub fn fetch(&mut self) -> u8 {
         let val = self.read_ram(self.pc);
-        self.pc += 1;
+        if self.halt_bug {
+            self.halt_bug = false;
+        } else {
+            self.pc = self.pc.wrapping_add(1);
+        }
         val
     }
 
@@ -459,6 +469,27 @@ impl Cpu {
 
     pub fn set_irq(&mut self, enabled: bool) {
         self.irq_enabled = enabled;
+        self.ei_delay = 0;
+    }
+
+    pub fn enable_irq_delayed(&mut self) {
+        self.ei_delay = 2;
+    }
+
+    pub fn disable_irq(&mut self) {
+        self.irq_enabled = false;
+        self.ei_delay = 0;
+    }
+
+    pub fn halt(&mut self) {
+        let if_reg = self.read_ram(IF);
+        let ie_reg = self.read_ram(IE);
+        let pending = (if_reg & ie_reg & 0x1F) != 0;
+        if !self.irq_enabled && pending {
+            self.halt_bug = true;
+        } else {
+            self.halted = true;
+        }
     }
 
     pub fn set_halted(&mut self, halted: bool) {
@@ -523,6 +554,13 @@ impl Cpu {
 
         if ppu_cycles > 0 {
             self.bus.apu.tick(ppu_cycles);
+        }
+
+        if self.ei_delay > 0 {
+            self.ei_delay -= 1;
+            if self.ei_delay == 0 {
+                self.irq_enabled = true;
+            }
         }
 
         if let Some(irq) = self.check_irq() {

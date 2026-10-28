@@ -39,6 +39,7 @@ const OPCODES: [fn(&mut Cpu) -> u8; 256] = [
 
 pub fn execute(cpu: &mut Cpu) -> u8 {
     let op_index = cpu.fetch();
+    cpu.last_opcode = op_index;
     OPCODES[op_index as usize](cpu)
 }
 
@@ -1900,14 +1901,14 @@ fn reti_d9(cpu: &mut Cpu) -> u8 {
 
 // DI ----
 fn di_f3(cpu: &mut Cpu) -> u8 {
-    cpu.set_irq(false);
-    4
+    cpu.disable_irq();
+    1
 }
 
 // EI
 fn ei_fb(cpu: &mut Cpu) -> u8 {
-    cpu.set_irq(true);
-    4
+    cpu.enable_irq_delayed();
+    1
 }
 
 // STOP ----
@@ -1919,7 +1920,7 @@ fn stop_10(cpu: &mut Cpu) -> u8 {
 
 // HALT ----
 fn halt_76(cpu: &mut Cpu) -> u8 {
-    cpu.set_halted(true);
+    cpu.halt();
     1
 }
 
