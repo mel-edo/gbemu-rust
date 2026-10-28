@@ -67,7 +67,7 @@ impl Rtc {
                 let mut ret = 0;
                 ret.set_bit(DAY_HIGH_BIT, self.days.get_bit(8));
                 ret.set_bit(HALT_BIT, self.halted);
-                ret.set_bit(DAY_OVERFLOW_BIT, self.days.get_bit(10));
+                ret.set_bit(DAY_OVERFLOW_BIT, self.overflow);
                 ret
             },
             _ => { unreachable!() }

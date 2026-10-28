@@ -238,6 +238,9 @@ impl Cart {
     }
 
     fn mbc2_write_rom(&mut self, addr: u16, val: u8) {
+        if addr >= 0x4000 {
+            return;
+        }
         let bank_swap = addr.get_bit(MBC2_ROM_CONTROL_BIT);
         if bank_swap {
             let bank = (val & 0x0F) as u16;
