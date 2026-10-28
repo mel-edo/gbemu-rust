@@ -4,11 +4,10 @@ use crate::debug::Debugger;
 use gb_core::{
     cpu::Cpu,
     io::Buttons,
-    utils::{DISPLAY_BUFFER, SCREEN_HEIGHT, SCREEN_WIDTH},
+    utils::{SCREEN_HEIGHT, SCREEN_WIDTH},
 };
 use sdl2::{
-    audio::AudioSpecDesired, event::Event, keyboard::Keycode, pixels::Color, rect::Rect,
-    render::Canvas, video::Window,
+    audio::AudioSpecDesired, event::Event, keyboard::Keycode, pixels::PixelFormatEnum,
 };
 use std::{
     env,
@@ -59,6 +58,14 @@ fn main() {
         .build()
         .unwrap();
     let mut canvas = window.into_canvas().present_vsync().build().unwrap();
+    let texture_creator = canvas.texture_creator();
+    let mut texture = texture_creator
+        .create_texture_streaming(
+            PixelFormatEnum::RGBA32,
+            SCREEN_WIDTH as u32,
+            SCREEN_HEIGHT as u32,
+        )
+        .unwrap();
     canvas.clear();
     canvas.present();
 
@@ -113,7 +120,10 @@ fn main() {
         }
         
         let frame = gb.render();
-        draw_screen(&frame, &mut canvas);
+        texture.update(None, &frame, SCREEN_WIDTH * 4).unwrap();
+        canvas.clear();
+        canvas.copy(&texture, None, None).unwrap();
+        canvas.present();
     }
 }
 
@@ -123,19 +133,6 @@ fn load_rom(path: &str) -> Vec<u8> {
     let mut f = File::open(path).expect("Error opening ROM file");
     f.read_to_end(&mut buffer).expect("Error loading ROM");
     buffer
-}
-
-fn draw_screen(data: &[u8], canvas: &mut Canvas<Window>) {
-    for i in (0..DISPLAY_BUFFER).step_by(4) {
-        canvas.set_draw_color(Color::RGB(data[i], data[i + 1], data[i + 2]));
-        let pixel = i / 4;
-        let x = (pixel % SCREEN_WIDTH) as u32;
-        let y = (pixel / SCREEN_WIDTH) as u32;
-
-        let rect = Rect::new((x * SCALE) as i32, (y * SCALE) as i32, SCALE, SCALE);
-        canvas.fill_rect(rect).unwrap();
-    }
-    canvas.present();
 }
 
 fn tick_until_draw(gb: &mut Cpu, gbd: &mut Debugger, gamename: &str) {
